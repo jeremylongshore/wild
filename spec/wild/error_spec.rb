@@ -1,32 +1,32 @@
 # frozen_string_literal: true
 
-# Pair every error class with the level at which a consumer would catch it.
-# This table IS the contract — adding/renaming a class without updating the
-# table fails the spec and forces a CHANGELOG entry under the affected
-# namespace (per the architecture doc's public-API rules).
-ERROR_TABLE = {
-  Wild::Error => [StandardError],
-  Wild::ConfigurationError => [Wild::Error, StandardError],
-
-  Wild::CapabilityGate::Error => [Wild::Error, StandardError],
-  Wild::CapabilityGate::DeniedError => [Wild::CapabilityGate::Error, Wild::Error, StandardError],
-  Wild::CapabilityGate::PolicyError => [Wild::CapabilityGate::Error, Wild::Error, StandardError],
-  Wild::CapabilityGate::EvaluationError => [Wild::CapabilityGate::Error, Wild::Error, StandardError],
-
-  Wild::Introspection::Error => [Wild::Error, StandardError],
-  Wild::Introspection::ForbiddenError => [Wild::Introspection::Error, Wild::Error, StandardError],
-  Wild::Introspection::ModelNotAllowedError => [Wild::Introspection::Error, Wild::Error, StandardError],
-
-  Wild::AdminTools::Error => [Wild::Error, StandardError],
-  Wild::Telemetry::Error => [Wild::Error, StandardError],
-  Wild::Hooks::Error => [Wild::Error, StandardError],
-  Wild::Analyzers::Error => [Wild::Error, StandardError],
-  Wild::Skillops::Error => [Wild::Error, StandardError]
-}.freeze
-
 RSpec.describe Wild::Error do
+  # Pair every error class with the level at which a consumer would catch it.
+  # This table IS the contract — adding/renaming a class without updating the
+  # table fails the spec and forces a CHANGELOG entry under the affected
+  # namespace (per the architecture doc's public-API rules).
+  error_table = {
+    Wild::Error => [StandardError],
+    Wild::ConfigurationError => [Wild::Error, StandardError],
+
+    Wild::CapabilityGate::Error => [Wild::Error, StandardError],
+    Wild::CapabilityGate::DeniedError => [Wild::CapabilityGate::Error, Wild::Error, StandardError],
+    Wild::CapabilityGate::PolicyError => [Wild::CapabilityGate::Error, Wild::Error, StandardError],
+    Wild::CapabilityGate::EvaluationError => [Wild::CapabilityGate::Error, Wild::Error, StandardError],
+
+    Wild::Introspection::Error => [Wild::Error, StandardError],
+    Wild::Introspection::ForbiddenError => [Wild::Introspection::Error, Wild::Error, StandardError],
+    Wild::Introspection::ModelNotAllowedError => [Wild::Introspection::Error, Wild::Error, StandardError],
+
+    Wild::AdminTools::Error => [Wild::Error, StandardError],
+    Wild::Telemetry::Error => [Wild::Error, StandardError],
+    Wild::Hooks::Error => [Wild::Error, StandardError],
+    Wild::Analyzers::Error => [Wild::Error, StandardError],
+    Wild::Skillops::Error => [Wild::Error, StandardError]
+  }.freeze
+
   describe "inheritance contract" do
-    ERROR_TABLE.each do |klass, expected_ancestors|
+    error_table.each do |klass, expected_ancestors|
       it "#{klass} inherits from #{expected_ancestors.first}" do
         # Each class must be a direct subclass of its declared parent. Walks
         # the hierarchy one step at a time so a future refactor can't sneak
