@@ -141,13 +141,131 @@ to Codecov from CI.
 
 ### Namespace-boundary discipline
 
-Packwerk enforces that namespaces only depend on what their `package.yml` declares.
-If you find yourself wanting to add a cross-namespace import, prefer:
+The wild gem ships ten `Wild::*` namespaces in one Rails engine. Cross-namespace
+coupling is governed by three rules, layered:
 
-1. Refactor the shared concept into `lib/wild/hooks/` (the shared-concerns landing zone), OR
-2. Declare an explicit public API on the source namespace and depend on that
+| Layer | Mechanism | What it catches |
+|---|---|---|
+| 1 | Packwerk (`packwerk.yml` + per-namespace `package.yml`) | Cross-namespace imports not declared in `dependencies:` |
+| 2 | RuboCop (`.rubocop.yml`) | Forbidden constants, style conventions |
+| 3 | `# @api private` YARD discipline (this section) | Internal symbols not meant for cross-namespace use |
 
-A new private API symbol gets `# @api private` discipline; treating it as public requires an ADR.
+The allowed-edge graph between namespaces is locked by
+[`000-docs/adr/ADR-0003-namespace-dependency-graph.md`](000-docs/adr/ADR-0003-namespace-dependency-graph.md).
+A four-tier DAG: Hooks → Telemetry / Analyzers / Skillops → CapabilityGate →
+Introspection + AdminTools. The ADR enumerates every edge row-by-row.
+
+#### The `# @api private` discipline
+
+Every namespace's `lib/wild/<namespace>/` directory has an implicit two-tier shape:
+
+| Tier | Marker | Visible to |
+|---|---|---|
+| **Public** | None | Other namespaces (per ADR-0003), engine, consumers |
+| **Private** | `# @api private` YARD tag on the class, module, or method | Only that namespace's own files |
+
+Mark internal symbols with `# @api private` directly above the declaration:
+
+```ruby
+module Wild
+  module CapabilityGate
+    # @api private
+    class RuleCompiler
+      # ...
+    end
+
+    class Gate
+      # @api private
+      def normalize_subject(raw)
+        # ...
+      end
+    end
+  end
+end
+```
+
+A consumer calling a `# @api private` symbol gets no Ruby runtime error, but
+**Packwerk's `enforce_privacy: true`** (set in every namespace's `package.yml`,
+per ADR-0003) flags cross-namespace reads of these symbols at
+`bundle exec packwerk check` time. The YARD tag is the contract; Packwerk is
+the gate. Within-namespace use is unrestricted; cross-namespace use fails
+CI's boundary job. Breakage between releases for `# @api private` symbols is
+expected — they exist outside the public contract by design.
+
+#### When you want to add a public API symbol
+
+A symbol becomes public by NOT carrying `# @api private`. Adding one requires:
+
+1. **CHANGELOG entry** under that namespace's section. Describe the symbol's
+   signature + intended consumer use case.
+2. **An RSpec** covering the public contract (input → output, error cases).
+3. **PR review by the namespace's CODEOWNERS** (currently `@jeremylongshore`;
+   per-namespace ownership lands when contributors join).
+
+This applies whether the symbol is brand new OR you're removing `# @api private`
+from an existing internal class. Either path opens the same contract.
+
+#### When you want to add a new inter-namespace dependency
+
+If you find yourself reaching from namespace A into namespace B and Packwerk
+flags it, **stop and inspect ADR-0003**:
+
+1. **Is the edge already in the graph?** If yes, add `B` to A's
+   `lib/wild/<a>/package.yml` `dependencies:` list. Done.
+2. **Is the edge NOT in the graph?** That's the design constraint working.
+   Three legitimate paths:
+   - **Refactor the shared concept into `Wild::Hooks`** (the Tier 1 shared-concerns
+     substrate). Both A and B can then depend on Hooks. *This is the default
+     answer for shared utilities.*
+   - **Declare an explicit public API on B** and depend on that via the existing
+     graph. Often the right answer when only a small surface of B needs to be
+     visible.
+   - **Amend ADR-0003** if you genuinely need a new edge. ADR amendments require
+     a PR with rationale + ADR text update + Packwerk config update + CODEOWNERS
+     approval. The friction is intentional — boundary changes are decisions,
+     not drift.
+
+Do NOT just add the edge to `package.yml` and ship. Packwerk would let it
+through (since you'd have updated the config), but the contract recorded in
+the ADR would silently disagree with the running code. The next reviewer to
+hit a related question pays the price.
+
+#### When you want to add a new top-level namespace
+
+This requires an **ADR amendment to ADR-0001** (the topology decision). The
+council rev2 verdict locked the namespace count at ten. Adding an eleventh
+is allowed but requires explicit re-engagement with the decision substrate.
+
+#### When Packwerk flags an import
+
+`bundle exec packwerk check` runs in CI (currently `continue-on-error: true`
+until Role 8 lands `spec/dummy/` in P2). **Treat local Packwerk output as
+binding even while the CI job is informational** — the intentional friction
+this discipline relies on erodes during the soak window if contributors wait
+for CI to enforce it. Run locally before pushing:
+
+```bash
+bundle exec packwerk check
+```
+
+A violation usually means one of:
+
+| Symptom | Fix |
+|---|---|
+| Importing a constant from a namespace not in your `package.yml` `dependencies:` | Pick one of the three paths above; do NOT just append to `dependencies:` without checking ADR-0003 |
+| Importing a `# @api private` symbol from another namespace | Refactor — that symbol is internal by contract |
+| Cyclic dependency detected | ADR-0003 forbids cycles. Refactor the shared concept into Hooks (Tier 1) |
+| Reading a YAML / data file from another namespace | Move the file to `lib/wild/schemas/` (the shared schemas-as-data substrate, per ADR-0003 § Cross-namespace data). NOT a Packwerk package; loadable by any namespace |
+
+#### `lib/wild/schemas/` is shared data, not code
+
+The schemas directory holds YAML files shared across namespaces (e.g.,
+`wildcard_corpus.yml` consumed by both `Wild::Analyzers::Permission` and
+`Wild::CapabilityGate`). Per ADR-0003 it is intentionally **not a Packwerk
+package** — any namespace may load any schema file. Adding a new shared
+schema follows the same dual-CHANGELOG discipline as adding a wildcard
+form: entry under every namespace that loads it, plus a spec verifying
+the file's structure.
 
 ### Code Review
 
