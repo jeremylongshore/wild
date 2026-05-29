@@ -15,6 +15,7 @@ section splits into a separate file.
 
 ### Repo
 
+- `Wild::Error` consumer-distinguishable hierarchy: per-namespace `Wild::<Namespace>::Error` base + targeted subclasses (`CapabilityGate::{DeniedError,PolicyError,EvaluationError}`, `Introspection::{ForbiddenError,ModelNotAllowedError}`, `AdminTools::Error`, `Telemetry::Error`, `Hooks::Error`, `Analyzers::Error`, `Skillops::Error`). Matches `000-docs/003-AT-ARCH-architecture.md § Error hierarchy` verbatim. Closes MIN-Armstrong (`wild-rvv.1.3`). Role 4 PR-C.
 - Typed `Wild::Configuration` nested accessors with declared settings classes per namespace (`Introspection`, `AdminTools`, `CapabilityGate`, `Telemetry::{Collector,Pipeline,Analysis}`, `Hooks`, `Analyzers::{Permission,TestFlakes}`, `Skillops`); replaces the `OpenStruct`-based `method_missing` stub. Closes F1 design + initial implementation (`wild-rvv.1.1`). Per-namespace defaults: `on_evaluation_error: :hard_fail` (F2-mandated), `skillops.enabled: false` (F5), `telemetry.analysis.gap_threshold: 0.7`, etc. Role 4 PR-B.
 - Initial project setup with full governance (README, LICENSE, CODE_OF_CONDUCT, CONTRIBUTING, SECURITY, SUPPORT, CLAUDE.md, AGENTS.md, EditorConfig, gitattributes)
 - CI workflow (Ruby 3.2 + 3.3 + 3.4 matrix; RSpec, RuboCop, Packwerk, brakeman, bundler-audit; Codecov upload)
