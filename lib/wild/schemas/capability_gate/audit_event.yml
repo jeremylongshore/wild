@@ -1,0 +1,103 @@
+# Wild::CapabilityGate audit event schema (F2).
+#
+# Per ADR-0003 + 003-AT-ARCH § "Audit trail (F2 fix)": every capability-gate
+# decision path emits exactly one structured audit event matching this shape.
+# Council rev2 §F2 (Armstrong's most-leveraged finding): rescue paths inside
+# the gate MUST emit an event AND deny the request. `outcome: :evaluation_error`
+# is the F2 sentinel — never silent.
+#
+# Format: JSON Schema (draft 2020-12). Loaded by Wild::CapabilityGate at
+# boot; verified at runtime via json-schema gem (Role 6 wires the
+# validator). Audit consumers (downstream log/metric pipelines) can read
+# this same file to know what shape to expect.
+#
+# Source: /home/jeremy/000-projects/wild/wild-rails-ai-ops/000-docs/013-AT-AUDT-thinker-council-verdict-rev2-2026-05-29.md § F2
+# Architecture: 000-docs/003-AT-ARCH-architecture.md § "Audit trail (F2 fix)"
+
+"$schema": "https://json-schema.org/draft/2020-12/schema"
+title: Wild::CapabilityGate audit event (v1)
+description: |
+  One audit event per capability-gate decision. Emitted exactly once per
+  Gate#evaluate call, including paths that fall into a rescue block (F2 —
+  outcome: :evaluation_error always paired with an audit event, never silent).
+type: object
+required:
+  - timestamp
+  - decision_id
+  - capability
+  - subject
+  - outcome
+  - policy_version
+  - rationale
+  - audit_emit_ms
+additionalProperties: false
+properties:
+  timestamp:
+    type: string
+    format: date-time
+    description: ISO 8601 timestamp of the decision (UTC).
+
+  decision_id:
+    type: string
+    format: uuid
+    description: |
+      Unique per-decision UUID. Used to correlate the audit event with
+      downstream telemetry events and any consumer-side trace span.
+
+  capability:
+    type: string
+    pattern: "^[a-z][a-z0-9_]*$"
+    description: |
+      The capability name the subject attempted to exercise. Symbol-like
+      identifier (lowercase + underscores). Matched against the policy via
+      the shared wildcard corpus (`lib/wild/schemas/wildcard_corpus.yml`).
+
+  subject:
+    type: string
+    description: |
+      Opaque identifier for the requester. Typical shape:
+      `agent:<type>:<id>` (e.g. `agent:claude-code:abc123`). Never PII.
+
+  outcome:
+    type: string
+    enum:
+      - allow
+      - deny
+      - evaluation_error
+    description: |
+      :allow — capability granted; :deny — capability refused by policy;
+      :evaluation_error — exception rescued inside the gate (F2 hard-fail).
+      Schema enforces that no fourth outcome can sneak in.
+
+  policy_version:
+    type: string
+    pattern: "^capabilities\\.yml@sha256:[a-f0-9]{64}$"
+    description: |
+      SHA-256 fingerprint of the capabilities.yml file used for the
+      decision. Allows audit replay against a known policy state.
+
+  rationale:
+    type: string
+    minLength: 1
+    description: |
+      Human-readable one-line explanation. Examples:
+        "matched_rule:admin_introspection_read_only"
+        "no_rule_matched"
+        "evaluation_error:NoMethodError on policy node 'capabilities[3].when'"
+
+  audit_emit_ms:
+    type: number
+    minimum: 0
+    description: |
+      Wall-clock milliseconds spent inside the audit emission. Used by
+      the F2 audit-liveness spec to detect emitters that silently fail
+      (a successful emit takes >0 ms).
+
+  # Optional extension fields — consumers may attach additional context.
+  # Schema-level enforcement of additionalProperties: false prevents typo
+  # drift in required fields; extension fields go under `extra`.
+  extra:
+    type: object
+    description: |
+      Optional consumer-defined context. Keep small (<2 KiB) — large
+      payloads belong in telemetry, not audit.

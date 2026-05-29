@@ -1,0 +1,105 @@
+# Wildcard matching corpus — shared by Wild::Analyzers::Permission and
+# Wild::CapabilityGate.
+#
+# Per ADR-0003 + 003-AT-ARCH § "Cross-namespace contract drift defense (F4)":
+# these two namespaces both make wildcard matching decisions on capability
+# names and model paths. They MUST never disagree on what counts as a
+# wildcard. This corpus is the single shared truth table: both code paths
+# load this file at boot and run their matchers against it as a smoke test.
+#
+# Each entry has the shape:
+#   - pattern: the literal pattern string a policy author would write
+#     description: one-line explanation
+#     matches: list of strings the pattern should match
+#     non_matches: list of strings the pattern should NOT match
+#
+# Adding a wildcard form requires:
+#   1. New entry here (matches + non_matches both non-empty)
+#   2. Spec assertion in spec/wild/schemas/wildcard_corpus_spec.rb
+#      that load + match both work
+#   3. Implementation change in BOTH lib/wild/analyzers/permission/
+#      AND lib/wild/capability_gate/ (Packwerk enforces neither can
+#      reach into the other — they each load this YAML independently)
+#   4. CHANGELOG entry under Wild::Analyzers::Permission AND
+#      Wild::CapabilityGate sections
+#
+# Tracked in council rev2 § F4. Source:
+# /home/jeremy/000-projects/wild/wild-rails-ai-ops/000-docs/013-AT-AUDT-thinker-council-verdict-rev2-2026-05-29.md
+
+version: 1
+
+patterns:
+  - pattern: "User"
+    description: Exact match against a single segment
+    matches:
+      - "User"
+    non_matches:
+      - "Users"
+      - "User::Profile"
+      - "user"
+      - ""
+
+  - pattern: "User::Profile"
+    description: Exact match against a double-segment path
+    matches:
+      - "User::Profile"
+    non_matches:
+      - "User"
+      - "User::Profile::Email"
+      - "Admin::User::Profile"
+
+  - pattern: "User::*"
+    description: Suffix wildcard — matches any direct child segment, NOT grandchildren
+    matches:
+      - "User::Profile"
+      - "User::Settings"
+      - "User::Admin"
+    non_matches:
+      - "User"
+      - "User::Profile::Email"
+      - "Admin::User"
+
+  - pattern: "*::Admin"
+    description: Prefix wildcard — matches any single-parent ::Admin
+    matches:
+      - "User::Admin"
+      - "Product::Admin"
+    non_matches:
+      - "Admin"
+      - "User::Settings::Admin"
+      - "User::Admin::Permissions"
+
+  - pattern: "User::**"
+    description: Recursive wildcard — matches User and any descendant segments
+    matches:
+      - "User"
+      - "User::Profile"
+      - "User::Profile::Email"
+      - "User::Settings::Notifications::Push"
+    non_matches:
+      - "Users"
+      - "Admin::User"
+
+  - pattern: "*"
+    description: Universal wildcard — matches any non-empty segment string
+    matches:
+      - "User"
+      - "User::Profile"
+      - "Admin"
+    non_matches:
+      - ""
+
+  - pattern: "!User::Admin"
+    description: Negation — explicitly excludes the named path (consumer composes with other patterns)
+    matches: []
+    non_matches:
+      - "User::Admin"
+
+  - pattern: "User::*::Profile"
+    description: Wildcard middle segment — matches one intermediate segment, NOT two
+    matches:
+      - "User::Public::Profile"
+      - "User::Admin::Profile"
+    non_matches:
+      - "User::Profile"
+      - "User::Public::Settings::Profile"
