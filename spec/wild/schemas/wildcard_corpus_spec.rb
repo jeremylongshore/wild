@@ -2,6 +2,8 @@
 
 require "yaml"
 
+# Schema test describes a data file, not a class.
+# rubocop:disable RSpec/DescribeClass
 RSpec.describe "lib/wild/schemas/wildcard_corpus.yml" do
   subject(:corpus) { YAML.safe_load_file(corpus_path, permitted_classes: []) }
 
@@ -69,15 +71,21 @@ RSpec.describe "lib/wild/schemas/wildcard_corpus.yml" do
   end
 
   describe "documented wildcard forms" do
-    it "covers exact, suffix, prefix, recursive, universal, negation, middle-wildcard" do
-      patterns = corpus.fetch("patterns").map { |e| e.fetch("pattern") }
-      expect(patterns).to include("User")                # exact
-      expect(patterns).to include("User::*")             # suffix wildcard
-      expect(patterns).to include("*::Admin")            # prefix wildcard
-      expect(patterns).to include("User::**")            # recursive
-      expect(patterns).to include("*")                   # universal
-      expect(patterns).to include("!User::Admin")        # negation
-      expect(patterns).to include("User::*::Profile")    # middle wildcard
+    let(:patterns) { corpus.fetch("patterns").map { |e| e.fetch("pattern") } }
+
+    {
+      "exact" => "User",
+      "suffix wildcard" => "User::*",
+      "prefix wildcard" => "*::Admin",
+      "recursive wildcard" => "User::**",
+      "universal wildcard" => "*",
+      "negation" => "!User::Admin",
+      "middle wildcard" => "User::*::Profile"
+    }.each do |form_name, pattern|
+      it "includes the #{form_name} form (#{pattern})" do
+        expect(patterns).to include(pattern)
+      end
     end
   end
 end
+# rubocop:enable RSpec/DescribeClass

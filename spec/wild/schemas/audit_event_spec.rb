@@ -2,12 +2,15 @@
 
 require "yaml"
 
+# Schema tests describe a data file, not a class — RSpec/DescribeClass +
+# RSpec/ExpectActual fire on literal-string actuals in pattern checks below.
+# rubocop:disable RSpec/DescribeClass, RSpec/ExpectActual
 RSpec.describe "lib/wild/schemas/capability_gate/audit_event.yml" do
   subject(:schema) { YAML.safe_load_file(schema_path, permitted_classes: []) }
 
   let(:schema_path) do
     File.expand_path(
-      "../../../../lib/wild/schemas/capability_gate/audit_event.yml",
+      "../../../lib/wild/schemas/capability_gate/audit_event.yml",
       __dir__
     )
   end
@@ -50,7 +53,7 @@ RSpec.describe "lib/wild/schemas/capability_gate/audit_event.yml" do
     # SHA-256 fingerprint enables audit replay against a known policy state.
     it "matches capabilities.yml@sha256:<64-hex>" do
       pattern = schema.fetch("properties").fetch("policy_version").fetch("pattern")
-      expect("capabilities.yml@sha256:#{'a' * 64}").to match(Regexp.new(pattern))
+      expect("capabilities.yml@sha256:#{"a" * 64}").to match(Regexp.new(pattern))
       expect("capabilities.yml@sha256:short").not_to match(Regexp.new(pattern))
       expect("capabilities.yml@md5:abc").not_to match(Regexp.new(pattern))
     end
@@ -73,3 +76,4 @@ RSpec.describe "lib/wild/schemas/capability_gate/audit_event.yml" do
     end
   end
 end
+# rubocop:enable RSpec/DescribeClass, RSpec/ExpectActual
