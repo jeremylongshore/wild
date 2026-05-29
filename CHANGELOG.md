@@ -18,6 +18,7 @@ section splits into a separate file.
 - Initial project setup with full governance (README, LICENSE, CODE_OF_CONDUCT, CONTRIBUTING, SECURITY, SUPPORT, CLAUDE.md, AGENTS.md, EditorConfig, gitattributes)
 - CI workflow (Ruby 3.2 + 3.3 + 3.4 matrix; RSpec, RuboCop, Packwerk, brakeman, bundler-audit; Codecov upload)
 - Release workflow (workflow_dispatch only — no auto-release on push; v0.1.0 ships at end of the 4-week consolidation build)
+- CodeQL static analysis workflow (`security-extended` suite on `ruby` + `actions`; weekly schedule; repo-specific `.github/codeql/codeql-config.yml`); strategy documented at `000-docs/007-AT-STND-codeql-strategy.md`
 - Dependabot for bundler + GitHub Actions
 - Issue templates (bug, feature) + PR template
 - CODEOWNERS, FUNDING

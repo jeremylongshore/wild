@@ -1,0 +1,73 @@
+# CodeQL configuration for jeremylongshore/wild
+#
+# Strategy doc:   000-docs/007-AT-STND-codeql-strategy.md (canonical)
+# Council source: /home/jeremy/000-projects/wild/wild-rails-ai-ops/000-docs/013-AT-AUDT-thinker-council-verdict-rev2-2026-05-29.md
+#
+# Repo-specific choices (NOT defaults — these need updating when scope changes):
+#   - Languages: ruby + actions (no JS/Python/Go/etc — pure Ruby engine gem)
+#   - security-extended: ON to catch Ruby taint flows brakeman misses (council
+#     rev2 prioritized security correctness, esp. F2 audit-blind paths)
+#   - security-and-quality: OFF until end of P1 (quality queries are noise on a
+#     repo where namespaces are still placeholder dirs)
+#   - paths: limited to actual production surface
+#   - paths-ignore: tests, dummy app, docs, generated, vendored
+
+name: "wild — Ruby engine gem + Actions"
+
+# Built-in query suites. security-extended adds Ruby taint queries beyond default.
+# Do NOT enable security-and-quality until end of P1 (lib/wild/<namespace>/ has
+# real code) — quality queries fire on stub code and drown signal.
+queries:
+  - uses: security-extended
+
+# Scope CodeQL to actual production code.
+# When new namespaces land in P1 (Role 5 code moves), this list does NOT need
+# changing — lib/wild/** is wildcarded.
+paths:
+  - lib/wild/**
+  - lib/generators/**
+  - lib/wild.rb
+  - bin/wild-mcp-introspection
+  - bin/wild-mcp-admin
+  - .github/workflows/**
+
+# Exclude everything that isn't production-surface code.
+#
+# spec/dummy/        — throwaway Rails app for engine integration tests; not prod
+# spec/**            — all tests
+# 000-docs/**        — markdown documentation
+# prompts/**         — versioned MCP tool descriptions (markdown); Karpathy seam
+# schemas/**         — schemas-as-data (YAML); Hickey seam
+# coverage/**        — SimpleCov output
+# tmp/, log/, pkg/   — build artifacts
+# vendor/**          — vendored gems
+# .beads/, .dolt/    — bd database/exports
+# .audit-harness/    — vendored testing harness (when added by /implement-tests)
+# bin/setup, bin/console — dev shell scripts; out of MCP boundary
+# build-orchestration/   — sibling workspace, not part of this repo, but listed
+#                          for completeness if pulled into a check
+paths-ignore:
+  - "spec/**"
+  - "000-docs/**"
+  - "prompts/**"
+  - "schemas/**"
+  - "coverage/**"
+  - "tmp/**"
+  - "log/**"
+  - "pkg/**"
+  - "vendor/**"
+  - "node_modules/**"
+  - ".beads/**"
+  - ".dolt/**"
+  - ".audit-harness/**"
+  - "bin/setup"
+  - "bin/console"
+
+# Notes for future maintainers:
+#  - Custom query packs are NOT enabled yet. See strategy doc §C for the roadmap.
+#    First candidate when capability_gate code lands: rb/wild/audit-emission-required
+#    (enforces F2 council fix at AST level, not just at test time).
+#  - If you add a new top-level Wild::* namespace (requires ADR-0001 amendment),
+#    no change here is needed — lib/wild/** catches it.
+#  - If a future external consumer triggers ADR-0002 extraction of a namespace
+#    into its own gem, the extracted repo gets its own copy of this config.
