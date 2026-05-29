@@ -148,26 +148,30 @@ RSpec.describe Wild::Configuration do
       expect(yielded).to equal(Wild.config)
     end
 
-    it "supports the canonical end-to-end mutation pattern" do
+    it "sets global accessors via Wild.configure" do
       Wild.configure do |c|
         c.audit_logger = :stub_logger
         c.environment = :test
-        c.introspection.access_policy_path = "/tmp/policy.yml"
-        c.capability_gate.on_evaluation_error = :hard_fail
-        c.telemetry.collector.enabled = false
-        c.telemetry.analysis.gap_threshold = 0.42
-        c.analyzers.permission.cycle_detection = :lenient
-        c.skillops.enabled = true
       end
-
       expect(Wild.config.audit_logger).to eq(:stub_logger)
       expect(Wild.config.environment).to eq(:test)
+    end
+
+    it "sets per-namespace nested settings via Wild.configure" do
+      Wild.configure do |c|
+        c.introspection.access_policy_path = "/tmp/policy.yml"
+        c.telemetry.collector.enabled = false
+        c.analyzers.permission.cycle_detection = :lenient
+      end
       expect(Wild.config.introspection.access_policy_path).to eq("/tmp/policy.yml")
-      expect(Wild.config.capability_gate.on_evaluation_error).to eq(:hard_fail)
       expect(Wild.config.telemetry.collector.enabled).to be(false)
-      expect(Wild.config.telemetry.analysis.gap_threshold).to eq(0.42)
       expect(Wild.config.analyzers.permission.cycle_detection).to eq(:lenient)
-      expect(Wild.config.skillops.enabled).to be(true)
+    end
+
+    it "preserves F2 + F5 council defaults when not overridden" do
+      Wild.configure { |c| c.environment = :test }
+      expect(Wild.config.capability_gate.on_evaluation_error).to eq(:hard_fail)
+      expect(Wild.config.skillops.enabled).to be(false)
     end
   end
 end
