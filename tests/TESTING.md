@@ -70,7 +70,8 @@ phase.
 | L1 | GitHub Actions CI | Installed, enforced on `main` + PRs | `.github/workflows/ci.yml` |
 | L1 | GitHub Actions Release | Installed, `workflow_dispatch` only | `.github/workflows/release.yml` |
 | L1 | GitHub Actions CodeQL | Installed (PR #6 — not yet merged to main) | `.github/workflows/codeql.yml` |
-| L1 | Pre-commit hooks | **ABSENT** | (gap; see `TEST_AUDIT.md`) |
+| L0 | `.audit-harness/` (vendored v1.1.4) | Installed; wrapper at `scripts/audit-harness`; `.harness-hash` initialized (0 files pinned — no auto-discoverable artifacts yet) | `.audit-harness/`, `scripts/audit-harness`, `.harness-hash` |
+| L1 | Local git hooks (plain-shell) | Installed; engineer runs `scripts/install-hooks` once per clone | `scripts/git-hooks/{pre-commit,commit-msg,pre-push}`, `scripts/install-hooks` |
 | L1 | Dependabot | Installed | `.github/dependabot.yml` |
 | L2 | RuboCop (+ rails + rspec cops) | Installed, CI-enforced | `.rubocop.yml`, `ci.yml lint` job |
 | L2 | Packwerk (namespace boundary) | Installed, CI-enforced; per-namespace `package.yml` ABSENT (Role 4 deliverable in P1) | `packwerk.yml`, `ci.yml boundary` job |
@@ -107,11 +108,13 @@ phase.
 | Field | Value |
 |---|---|
 | Date | 2026-05-28 |
-| Branch | `feat/test-baseline` |
-| Grade | C (62/100) — see `TEST_AUDIT.md` |
-| P0 gaps | 3 |
-| P1 gaps | 6 |
-| Handoff to `/implement-tests` | recommended scope: L0 harness install + L1 git hooks + tests/ scaffolds; defer L3/L4/L5/L6/L7 expansion until Role 5 lands code |
+| Branch | `feat/test-baseline` (audit landed in PR #7 → main as f3462eb) |
+| Grade | C (62/100) — see commit `f3462eb` for the diagnostic snapshot |
+| P0 gaps at audit | 3 (audit-harness install, pre-commit hooks, 13 uncovered MUSTs) |
+| P0 gaps after this install | 1 (only the 13 uncovered MUSTs remain — bead-tracked under `wild-rvv.*`, owned by Roles 4-9 per build orchestration). L0 + L1 closed. |
+| P1 gaps after this install | 5 (CODECOV_TOKEN was set; per-namespace package.yml + 5 SHOULDs + persona/journey coverage + characterization-test pattern remain) |
+| `/implement-tests` execution | L0 + L1 + harness-hash init landed on `feat/test-implement-l0-l1` 2026-05-29 |
+| Re-audit cadence | End of P1 (after Role 7 closes `wild-rvv.7.1`) to lift waivers + measure namespace-level coverage |
 
 ## Audit-harness installation (L0)
 
@@ -119,5 +122,22 @@ phase.
 |---|---|
 | `@intentsolutions/audit-harness` (Node) | N/A (Ruby repo) |
 | `intent-audit-harness` (PyPI) | N/A |
-| `.audit-harness/` (vendored) | **ABSENT** — install via `curl -sSL https://raw.githubusercontent.com/jeremylongshore/audit-harness/main/install.sh \| bash` |
-| Hash manifest (`.harness-hash`) | **ABSENT** — initialize after engineer-reviewed first edit of policy sections |
+| `.audit-harness/` (vendored) | **Installed v1.1.4** at `.audit-harness/scripts/` |
+| Wrapper | `scripts/audit-harness` (invoke as `scripts/audit-harness <command>`) |
+| Hash manifest (`.harness-hash`) | **Initialized** 2026-05-29 — 0 files pinned (no Gherkin + no JS/Python architecture configs to auto-discover yet; populates as Role 4 lands per-namespace `package.yml` and any future `features/`) |
+
+### Vendored install notes
+
+- Upstream `install.sh` from `jeremylongshore/audit-harness` defaults to `v0.1.0` and contains a tarball-path bug (looks for `audit-harness-*` but the GitHub repo was renamed; tarballs unpack as `intent-audit-harness-X.Y.Z/`). Worked around manually by installing v1.1.4 with the corrected directory name. Tracked in user CLAUDE.md memory `audit-harness-npm-publish-gap-git-tags-v1`.
+- Wrapper at `scripts/audit-harness` mirrors the Node CLI surface; commands work identically across language stacks.
+
+## Local git hooks (L1)
+
+| Hook | Source | Behavior | Bypass |
+|---|---|---|---|
+| `pre-commit` | `scripts/git-hooks/pre-commit` | RuboCop on staged Ruby files | `git commit --no-verify` |
+| `commit-msg` | `scripts/git-hooks/commit-msg` | Conventional-commits regex | `git commit --no-verify` |
+| `pre-push` | `scripts/git-hooks/pre-push` | RSpec smoke (spec/wild_spec.rb only — fast) | `git push --no-verify` |
+| Installer | `scripts/install-hooks` | One-shot symlink installer; idempotent; supports `--uninstall` | — |
+
+Hooks are committed in-repo (`scripts/git-hooks/`) so updates flow through PR review. No gem dependency on lefthook / pre-commit / husky was added (engineer policy: `wild.gemspec` not modified during this install).

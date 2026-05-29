@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# pre-push — fast RSpec smoke (just spec/wild_spec.rb).
+#
+# Wired via: scripts/install-hooks. The full suite runs in CI; this hook
+# catches the obvious-broken-engine case before push.
+#
+# To bypass: git push --no-verify
+
+set -euo pipefail
+
+if ! command -v bundle >/dev/null 2>&1; then
+  echo "pre-push: bundle not found; skipping RSpec smoke." >&2
+  exit 0
+fi
+
+if [ ! -f spec/wild_spec.rb ]; then
+  exit 0
+fi
+
+if ! bundle exec rspec --no-color --format progress spec/wild_spec.rb; then
+  echo
+  echo "pre-push: spec/wild_spec.rb failed. Fix or bypass with \`git push --no-verify\` if you are certain." >&2
+  exit 1
+fi

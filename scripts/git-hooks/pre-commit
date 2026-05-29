@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# pre-commit — RuboCop on staged Ruby files.
+#
+# Wired via: scripts/install-hooks (run once per clone).
+# To bypass intentionally: git commit --no-verify
+
+set -euo pipefail
+
+STAGED_RB=$(git diff --cached --name-only --diff-filter=ACM -- '*.rb' '*.rake' '*.gemspec' 'Rakefile' 'Gemfile' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+
+if [ -z "$STAGED_RB" ]; then
+  exit 0
+fi
+
+if ! command -v bundle >/dev/null 2>&1; then
+  echo "pre-commit: bundle not found; skipping RuboCop. Install Ruby + run \`bundle install\` to enable hooks."
+  exit 0
+fi
+
+# Only run RuboCop against staged paths; --force-exclusion respects .rubocop.yml AllCops.Exclude
+# shellcheck disable=SC2086
+if ! bundle exec rubocop --no-server --force-exclusion --no-color $STAGED_RB; then
+  echo
+  echo "pre-commit: RuboCop reported issues. Fix or run \`bundle exec rubocop -a $STAGED_RB\` to autocorrect, then re-stage." >&2
+  exit 1
+fi
