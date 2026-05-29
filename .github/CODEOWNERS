@@ -1,0 +1,14 @@
+# Default code owners
+* @jeremylongshore
+
+# CI/CD workflows require owner approval
+/.github/workflows/ @jeremylongshore
+
+# Security-sensitive files
+SECURITY.md @jeremylongshore
+.github/dependabot.yml @jeremylongshore
+
+# Canonical decisions — require explicit owner approval
+000-docs/adr/ @jeremylongshore
+CLAUDE.md @jeremylongshore
+AGENTS.md @jeremylongshore

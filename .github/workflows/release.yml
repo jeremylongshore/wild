@@ -1,0 +1,193 @@
+name: Release
+
+# v0.1.0 ships at the END of the 4-week consolidation build, not on every push.
+# This workflow is workflow_dispatch only — the user fires it explicitly when the
+# stopwatch test passes and the council fixes are closed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: "Dry run (skip tag/push/release)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  discussions: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Set git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Verify readiness
+        run: |
+          echo "--- Checking for uncommitted changes ---"
+          if ! git diff --quiet || ! git diff --staged --quiet; then
+            echo "::error::Uncommitted changes detected"
+            exit 1
+          fi
+          echo "Working tree is clean."
+
+          echo "--- Running gates ---"
+          bundle exec rspec
+          bundle exec rubocop
+          bundle exec packwerk check
+          bundle exec brakeman --no-pager --quiet --no-progress
+          bundle exec bundler-audit check --update
+
+      - name: Determine previous tag
+        id: prev
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+          echo "Previous tag: $PREV_TAG"
+
+      - name: Decide bump type
+        id: bump
+        run: |
+          MANUAL_BUMP="${{ github.event.inputs.bump || 'auto' }}"
+          PREV_TAG="${{ steps.prev.outputs.tag }}"
+
+          if [ "$MANUAL_BUMP" != "auto" ]; then
+            echo "type=$MANUAL_BUMP" >> "$GITHUB_OUTPUT"
+            echo "Using manual bump: $MANUAL_BUMP"
+            exit 0
+          fi
+
+          COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+          if echo "$COMMITS" | grep -qiE "BREAKING CHANGE|^[a-z]+!:"; then
+            BUMP="major"
+          elif echo "$COMMITS" | grep -qiE "^feat(\(.*\))?:"; then
+            BUMP="minor"
+          else
+            BUMP="patch"
+          fi
+
+          echo "type=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "Auto-detected bump: $BUMP"
+
+      - name: Compute next version
+        id: version
+        run: |
+          PREV_TAG="${{ steps.prev.outputs.tag }}"
+          BUMP="${{ steps.bump.outputs.type }}"
+
+          VERSION="${PREV_TAG#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT"
+
+      - name: Update lib/wild/version.rb
+        run: |
+          NEXT="${{ steps.version.outputs.next }}"
+          VERSION_NUM="${NEXT#v}"
+          sed -i "s/VERSION = \".*\"/VERSION = \"$VERSION_NUM\"/" lib/wild/version.rb
+          git add lib/wild/version.rb
+
+      - name: Generate changelog entry
+        run: |
+          NEXT="${{ steps.version.outputs.next }}"
+          PREV_TAG="${{ steps.prev.outputs.tag }}"
+          DATE=$(date +%Y-%m-%d)
+
+          {
+            echo "## [$NEXT] - $DATE"
+            echo ""
+            if [ "$PREV_TAG" = "v0.0.0" ]; then
+              git log --pretty=format:"- %s (%h)" | head -50
+            else
+              git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)"
+            fi
+            echo ""
+            echo ""
+          } > /tmp/changelog_entry.md
+
+          {
+            head -1 CHANGELOG.md
+            echo ""
+            cat /tmp/changelog_entry.md
+            tail -n +2 CHANGELOG.md
+          } > /tmp/changelog_merged.md
+          mv /tmp/changelog_merged.md CHANGELOG.md
+
+          git add CHANGELOG.md
+
+      - name: Commit version bump
+        run: |
+          NEXT="${{ steps.version.outputs.next }}"
+          git diff --staged --quiet || git commit -m "chore(release): ${NEXT}"
+
+      - name: Create tag and push
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          NEXT="${{ steps.version.outputs.next }}"
+          git tag -a "$NEXT" -m "Release $NEXT"
+          git push origin HEAD "$NEXT"
+
+      - name: Build gem
+        if: github.event.inputs.dry_run != 'true'
+        run: gem build wild.gemspec
+
+      - name: Create GitHub Release
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEXT="${{ steps.version.outputs.next }}"
+          gh release create "$NEXT" \
+            --title "wild $NEXT" \
+            --generate-notes \
+            --latest \
+            wild-*.gem
+
+      - name: Dry run summary
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          NEXT="${{ steps.version.outputs.next }}"
+          echo "::notice::Dry run complete. Would have released $NEXT"

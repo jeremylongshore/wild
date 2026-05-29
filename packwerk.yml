@@ -1,0 +1,25 @@
+# Packwerk config — namespace-boundary lint for wild.
+#
+# Per ADR-0001 + 000-docs/003-AT-ARCH-architecture.md § "Boundary discipline":
+# each lib/wild/<namespace>/ becomes a Packwerk package in P1 (Role 4). This
+# root config exists from day one; per-namespace package.yml files land
+# alongside their code.
+#
+# Run: bundle exec packwerk check
+
+include:
+  - "lib/wild/**/*.rb"
+
+exclude:
+  - "spec/**/*"
+  - "lib/generators/**/*"
+  - "lib/wild/version.rb"
+  - "lib/wild/error.rb"
+  - "lib/wild/configuration.rb"
+  - "lib/wild/engine.rb"
+  - "lib/wild.rb"
+
+package_paths:
+  - "lib/wild"
+
+custom_associations: []

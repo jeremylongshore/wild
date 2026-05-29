@@ -1,0 +1,58 @@
+# ===== Ruby =====
+
+# Gems
+*.gem
+*.rbc
+
+# Bundler
+vendor/bundle/
+.bundle/
+pkg/
+
+# Testing / coverage
+coverage/
+spec/reports/
+.rspec_status
+
+# Temporary / logs
+tmp/
+log/
+
+# Gemfile.lock — keep for now (engine gem with Rails-app fixture in dummy/)
+# (do NOT uncomment unless removing dummy/ Rails app)
+
+# Debugger
+.byebug_history
+
+# Packwerk
+.packwerk_cache/
+
+# RuboCop
+.rubocop_cache/
+
+# ===== Dummy Rails app (for engine integration testing) =====
+spec/dummy/db/*.sqlite3
+spec/dummy/db/*.sqlite3-*
+spec/dummy/log/*.log
+spec/dummy/storage/
+spec/dummy/tmp/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.code-workspace
+
+# ===== Environment =====
+.env
+.env.local
+
+# ===== Beads =====
+.beads/*.db-shm
+.beads/*.db-wal

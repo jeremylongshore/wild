@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# wild-mcp-introspection — standalone MCP server wrapping Wild::Introspection.
+# Implemented in P2 by Role 9 (ai-engineer). This stub is intentionally
+# minimal so the gemspec.bindir works for v0.0.x dev builds.
+
+require "bundler/setup"
+require "wild"
+
+warn "wild-mcp-introspection: pending P2 implementation (see build-orchestration/roles/09-mcp-ai-seams-engineer.md)"
+exit 1

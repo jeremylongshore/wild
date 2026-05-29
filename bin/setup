@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Idempotent dev-environment setup for the wild gem.
+
+bundle install
+bundle exec packwerk init || true
+
+echo
+echo "wild dev environment ready."
+echo
+echo "  bundle exec rspec                 # full test suite"
+echo "  bundle exec rake test:<namespace> # one namespace"
+echo "  bundle exec rubocop               # style"
+echo "  bundle exec packwerk check        # namespace boundary"
+echo "  bundle exec brakeman              # security"
+echo "  bundle exec bundler-audit check --update"

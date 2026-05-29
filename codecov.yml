@@ -1,0 +1,73 @@
+# Codecov configuration for wild.
+# Per 000-docs/005-AT-SPEC-technical-spec.md § "Coverage policy"
+
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "80...100"
+
+  status:
+    project:
+      default:
+        target: 85%       # repo-wide threshold
+        threshold: 1%
+        if_ci_failed: error
+      introspection:
+        paths:
+          - "lib/wild/introspection/"
+        target: 80%
+      admin_tools:
+        paths:
+          - "lib/wild/admin_tools/"
+        target: 80%
+      capability_gate:
+        paths:
+          - "lib/wild/capability_gate/"
+        target: 85%       # security-critical
+      telemetry:
+        paths:
+          - "lib/wild/telemetry/"
+        target: 80%
+      hooks:
+        paths:
+          - "lib/wild/hooks/"
+        target: 80%
+      analyzers:
+        paths:
+          - "lib/wild/analyzers/"
+        target: 80%
+      skillops:
+        paths:
+          - "lib/wild/skillops/"
+        target: 75%       # internal; lower threshold per F5
+      engine:
+        paths:
+          - "lib/wild.rb"
+          - "lib/wild/version.rb"
+          - "lib/wild/error.rb"
+          - "lib/wild/configuration.rb"
+          - "lib/wild/engine.rb"
+        target: 90%
+
+    patch:
+      default:
+        target: 80%
+        threshold: 0%
+
+comment:
+  layout: "header, diff, flags, components, files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "spec/**/*"
+  - "bin/**/*"
+  - "lib/generators/**/*"
+  - "000-docs/**/*"
+  - "schemas/**/*"
+  - "prompts/**/*"
