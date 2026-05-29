@@ -7,17 +7,17 @@ RSpec::Core::RakeTask.new(:spec)
 
 # Per-namespace test tasks — Beck Refinement #3 / DHH Week-2 plan
 # Each task runs RSpec scoped to one namespace's spec subtree.
-namespace :test do
-  WILD_NAMESPACES = %w[
-    introspection
-    admin_tools
-    capability_gate
-    telemetry
-    hooks
-    analyzers
-    skillops
-  ].freeze
+WILD_NAMESPACES = %w[
+  introspection
+  admin_tools
+  capability_gate
+  telemetry
+  hooks
+  analyzers
+  skillops
+].freeze
 
+namespace :test do
   WILD_NAMESPACES.each do |ns|
     desc "Run #{ns} namespace specs"
     RSpec::Core::RakeTask.new(ns.to_sym) do |t|

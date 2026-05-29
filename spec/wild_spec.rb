@@ -2,19 +2,19 @@
 
 RSpec.describe Wild do
   it "has a version number" do
-    expect(Wild::VERSION).to be_a(String)
-    expect(Wild::VERSION).to match(/\A\d+\.\d+\.\d+/)
+    expect(described_class::VERSION).to be_a(String)
+    expect(described_class::VERSION).to match(/\A\d+\.\d+\.\d+/)
   end
 
   describe ".configure" do
     it "yields the singleton configuration" do
       yielded = nil
-      Wild.configure { |c| yielded = c }
-      expect(yielded).to equal(Wild.config)
+      described_class.configure { |c| yielded = c }
+      expect(yielded).to equal(described_class.config)
     end
 
     it "returns the configuration" do
-      expect(Wild.configure).to equal(Wild.config)
+      expect(described_class.configure).to equal(described_class.config)
     end
   end
 
@@ -30,7 +30,7 @@ RSpec.describe Wild do
         :skillops
       )
       Wild::Configuration::NAMESPACES.each do |ns|
-        expect(Wild.config.public_send(ns)).not_to be_nil
+        expect(described_class.config.public_send(ns)).not_to be_nil
       end
     end
   end

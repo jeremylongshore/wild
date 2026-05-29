@@ -51,7 +51,7 @@ module Wild
     # P1; this stub keeps `Wild.configure { |c| c.<ns>.<setting> = ... }`
     # working in the meantime without forcing every namespace setting to be
     # declared upfront.
-    def namespace_struct_for(_ns)
+    def namespace_struct_for(_namespace)
       Struct.new(:settings).new({}).tap do |s|
         s.define_singleton_method(:method_missing) do |name, *args|
           if name.to_s.end_with?("=")

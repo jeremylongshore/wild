@@ -4,24 +4,32 @@ if ENV["COVERAGE"]
   require "simplecov"
   require "simplecov-cobertura"
 
-  SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new([
-                                                                   SimpleCov::Formatter::HTMLFormatter,
-                                                                   SimpleCov::Formatter::CoberturaFormatter
-                                                                 ])
+  SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new(
+    [
+      SimpleCov::Formatter::HTMLFormatter,
+      SimpleCov::Formatter::CoberturaFormatter
+    ]
+  )
 
   SimpleCov.start do
     add_filter "/spec/"
     add_filter "/bin/"
     add_filter "/lib/generators/"
 
-    add_group "Introspection",      "lib/wild/introspection"
-    add_group "AdminTools",         "lib/wild/admin_tools"
-    add_group "CapabilityGate",     "lib/wild/capability_gate"
-    add_group "Telemetry",          "lib/wild/telemetry"
-    add_group "Hooks",              "lib/wild/hooks"
-    add_group "Analyzers",          "lib/wild/analyzers"
-    add_group "Skillops",           "lib/wild/skillops"
-    add_group "Engine",             %w[lib/wild.rb lib/wild/engine.rb lib/wild/configuration.rb lib/wild/error.rb lib/wild/version.rb]
+    add_group "Introspection",  "lib/wild/introspection"
+    add_group "AdminTools",     "lib/wild/admin_tools"
+    add_group "CapabilityGate", "lib/wild/capability_gate"
+    add_group "Telemetry",      "lib/wild/telemetry"
+    add_group "Hooks",          "lib/wild/hooks"
+    add_group "Analyzers",      "lib/wild/analyzers"
+    add_group "Skillops",       "lib/wild/skillops"
+    add_group "Engine", %w[
+      lib/wild.rb
+      lib/wild/engine.rb
+      lib/wild/configuration.rb
+      lib/wild/error.rb
+      lib/wild/version.rb
+    ]
 
     minimum_coverage 85
     minimum_coverage_by_file 75

@@ -24,10 +24,10 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata = {
-    "homepage_uri"      => spec.homepage,
-    "source_code_uri"   => spec.homepage,
-    "changelog_uri"     => "#{spec.homepage}/blob/main/CHANGELOG.md",
-    "bug_tracker_uri"   => "#{spec.homepage}/issues",
+    "homepage_uri" => spec.homepage,
+    "source_code_uri" => spec.homepage,
+    "changelog_uri" => "#{spec.homepage}/blob/main/CHANGELOG.md",
+    "bug_tracker_uri" => "#{spec.homepage}/issues",
     "documentation_uri" => "#{spec.homepage}/blob/main/README.md",
     "rubygems_mfa_required" => "true"
   }
@@ -47,16 +47,16 @@ Gem::Specification.new do |spec|
   # Runtime
   spec.add_dependency "rails", ">= 7.1"
 
-  # Development
-  spec.add_development_dependency "rspec",              "~> 3.13"
-  spec.add_development_dependency "rspec-rails",        "~> 6.1"
-  spec.add_development_dependency "simplecov",          "~> 0.22"
+  # Development (alphabetical — Gemspec/OrderedDependencies)
+  spec.add_development_dependency "brakeman", "~> 6.2"
+  spec.add_development_dependency "bundler-audit", "~> 0.9"
+  spec.add_development_dependency "packwerk", "~> 3.2"
+  spec.add_development_dependency "rspec", "~> 3.13"
+  spec.add_development_dependency "rspec-rails", "~> 6.1"
+  spec.add_development_dependency "rubocop", "~> 1.65"
+  spec.add_development_dependency "rubocop-rails", "~> 2.25"
+  spec.add_development_dependency "rubocop-rspec", "~> 3.0"
+  spec.add_development_dependency "simplecov", "~> 0.22"
   spec.add_development_dependency "simplecov-cobertura", "~> 2.1"
-  spec.add_development_dependency "rubocop",            "~> 1.65"
-  spec.add_development_dependency "rubocop-rails",      "~> 2.25"
-  spec.add_development_dependency "rubocop-rspec",      "~> 3.0"
-  spec.add_development_dependency "packwerk",           "~> 3.2"
-  spec.add_development_dependency "brakeman",           "~> 6.2"
-  spec.add_development_dependency "bundler-audit",      "~> 0.9"
-  spec.add_development_dependency "sqlite3",            "~> 2.0"
+  spec.add_development_dependency "sqlite3", "~> 2.0"
 end

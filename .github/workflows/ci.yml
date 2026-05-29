@@ -26,8 +26,13 @@ jobs:
         run: bundle exec rubocop --no-server --parallel --display-cop-names
 
   boundary:
-    name: Namespace boundary (Packwerk)
+    # Packwerk needs Rails-application context (spec/dummy/) AND per-namespace
+    # package.yml files. Both are P1/P2 deliverables (Role 4 + Role 8). Until
+    # then the job is informational: failure does NOT block PRs. Tracked under
+    # bd `wild-rvv.1` (engine epic) and `wild-rvv.9` (rails_ergonomics epic).
+    name: Namespace boundary (Packwerk) [informational]
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +46,10 @@ jobs:
         run: bundle exec packwerk check
 
   security:
+    # brakeman scans Rails apps. Until Role 8 lands spec/dummy/ in P2, brakeman
+    # exits non-zero with "no Rails app found". bundler-audit DOES work standalone
+    # so it runs unconditionally; brakeman runs informationally. Tracked under
+    # bd `wild-rvv.9` (rails_ergonomics epic — spec/dummy lands with the generator).
     name: Security (brakeman + bundler-audit)
     runs-on: ubuntu-latest
     steps:
@@ -52,7 +61,8 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
 
-      - name: brakeman
+      - name: brakeman (informational until spec/dummy lands in P2)
+        continue-on-error: true
         run: bundle exec brakeman --no-pager --quiet --no-progress
 
       - name: bundler-audit
