@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# commit-msg — enforce Conventional Commits format.
+#
+# Format: type(scope)?: subject
+#   type      — feat|fix|docs|style|refactor|test|chore|ci|build|perf
+#   scope     — optional, e.g. (engine), (capability_gate)
+#   !         — optional breaking-change marker
+#   subject   — short description, lowercase
+#
+# Examples:
+#   feat(engine): mount Wild::Engine at /wild by default
+#   fix(capability_gate): emit audit event on :evaluation_error path
+#   chore(release)!: bump version to v0.1.0
+#
+# To bypass: git commit --no-verify
+
+set -euo pipefail
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(head -n1 "$COMMIT_MSG_FILE" | sed 's/[[:space:]]*$//')
+
+# Skip merge / fixup / squash / revert auto-generated lines
+case "$COMMIT_MSG" in
+  Merge*|Revert*|fixup\!*|squash\!*|"")
+    exit 0
+    ;;
+esac
+
+PATTERN='^(feat|fix|docs|style|refactor|test|chore|ci|build|perf)(\([a-z0-9_-]+\))?!?:[[:space:]].+'
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+  cat >&2 <<'EOF'
+
+commit-msg: subject does not match Conventional Commits format.
+
+Required:  type(scope)?: subject
+   type:     feat|fix|docs|style|refactor|test|chore|ci|build|perf
+   scope:    optional, kebab-case in parens (e.g. capability_gate)
+   !:        optional breaking-change marker
+   subject:  short description
+
+Examples:
+   feat(engine): mount Wild::Engine at /wild
+   fix(capability_gate): emit audit on :evaluation_error
+   chore!: drop Ruby 3.1 support
+
+To bypass intentionally: git commit --no-verify
+EOF
+  echo
+  echo "Your message:  $COMMIT_MSG" >&2
+  exit 1
+fi

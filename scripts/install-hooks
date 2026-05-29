@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# install-hooks — symlink scripts/git-hooks/* into .git/hooks/
+#
+# Run once per clone. Idempotent — safe to re-run.
+# To skip a hook: `git commit --no-verify` / `git push --no-verify`.
+# To uninstall:   scripts/install-hooks --uninstall
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HOOKS_SRC="$REPO_ROOT/scripts/git-hooks"
+HOOKS_DST="$REPO_ROOT/.git/hooks"
+
+if [ ! -d "$REPO_ROOT/.git" ]; then
+  echo "install-hooks: no .git/ at $REPO_ROOT — not a git checkout?" >&2
+  exit 2
+fi
+
+if [ "${1:-}" = "--uninstall" ]; then
+  for hook in pre-commit commit-msg pre-push; do
+    target="$HOOKS_DST/$hook"
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$HOOKS_SRC/$hook" ]; then
+      rm "$target"
+      echo "removed: $target"
+    fi
+  done
+  exit 0
+fi
+
+mkdir -p "$HOOKS_DST"
+
+for hook in pre-commit commit-msg pre-push; do
+  src="$HOOKS_SRC/$hook"
+  dst="$HOOKS_DST/$hook"
+
+  if [ ! -x "$src" ]; then
+    chmod +x "$src"
+  fi
+
+  # If destination is already our symlink, skip
+  if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
+    echo "ok:      $hook (already linked)"
+    continue
+  fi
+
+  # If destination exists and isn't our symlink, back it up
+  if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+    backup="$dst.local.$(date +%s)"
+    mv "$dst" "$backup"
+    echo "backup:  $dst -> $backup"
+  fi
+
+  ln -sf "$src" "$dst"
+  echo "linked:  $hook"
+done
+
+echo
+echo "All hooks installed. To bypass a single commit: git commit --no-verify"

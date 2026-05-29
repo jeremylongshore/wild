@@ -22,19 +22,41 @@ cd wild
 # Install dependencies
 bin/setup
 
+# Wire local git hooks (one-time per clone — pre-commit RuboCop, commit-msg
+# conventional-commits, pre-push RSpec smoke)
+scripts/install-hooks
+
 # Run the test suite
 bundle exec rspec
 
 # Run lint
 bundle exec rubocop
 
-# Run namespace-boundary lint
+# Run namespace-boundary lint (informational until P2)
 bundle exec packwerk check
 
 # Run security gates
 bundle exec brakeman
 bundle exec bundler-audit check --update
 ```
+
+### Local git hooks
+
+`scripts/install-hooks` symlinks three plain-shell hooks into `.git/hooks/`:
+
+| Hook | What it does | Bypass |
+|---|---|---|
+| `pre-commit` | RuboCop on staged Ruby files (`*.rb`, `*.rake`, `*.gemspec`, `Rakefile`, `Gemfile`) | `git commit --no-verify` |
+| `commit-msg` | Enforces Conventional Commits format (`type(scope)?: subject`) | `git commit --no-verify` |
+| `pre-push` | RSpec smoke against `spec/wild_spec.rb` (fast; full suite runs in CI) | `git push --no-verify` |
+
+To uninstall: `scripts/install-hooks --uninstall`.
+
+The hooks are committed under `scripts/git-hooks/` so updates flow through PRs.
+This pattern is intentionally lightweight — no gem dependency on lefthook / pre-commit /
+husky. The audit harness vendored at `.audit-harness/` provides the deeper gates
+(escape-scan, hash-pinning, CRAP scoring, bias detection) and is invoked via
+`scripts/audit-harness <command>`.
 
 ## Repository shape
 
