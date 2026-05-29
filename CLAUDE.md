@@ -102,6 +102,18 @@ wild/
 - Per-namespace SemVer stamps inside the single gem's version.rb history (Beck Refinement #3)
 - `# @api private` discipline on internal symbols not intended for consumers
 
+## Code review
+
+**Gemini review on this repo: release PRs only, not every PR.**
+
+Override of the global default in `~/.claude/CLAUDE.md` (which calls for
+`/gemini-review` on every feature PR). On `jeremylongshore/wild`, only the PR
+that cuts a release (v0.1.0, minor/major bumps) should be force-invoked with
+`/gemini-review`. Feature and fix PRs do NOT get auto-invocation.
+
+Engineer can still post `/gemini-review` manually on any PR they want a deep
+read on — the policy only constrains AI's autonomous behavior.
+
 ## Secrets
 
 This repo follows the Intent Solutions SOPS + age standard. Encrypted secrets
