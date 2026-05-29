@@ -1,0 +1,13 @@
+# Wild::Analyzers::Permission — Tier 2 permission model analyzer.
+#
+# Per ADR-0003: CLI + library. Provides policy-evaluation primitives that
+# Wild::CapabilityGate (Tier 3) delegates to. Fowler's `detect_cycle`
+# false-positive fix lives in this namespace.
+#
+# F4 fix: shares lib/wild/schemas/wildcard_corpus.yml with
+# Wild::CapabilityGate so the two cannot drift on wildcard matching.
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+  - "../../hooks"

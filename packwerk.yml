@@ -1,11 +1,17 @@
 # Packwerk config — namespace-boundary lint for wild.
 #
-# Per ADR-0001 + 000-docs/003-AT-ARCH-architecture.md § "Boundary discipline":
-# each lib/wild/<namespace>/ becomes a Packwerk package in P1 (Role 4). This
-# root config exists from day one; per-namespace package.yml files land
-# alongside their code.
+# Per ADR-0001 (topology) + ADR-0003 (namespace dependency graph) +
+# 000-docs/003-AT-ARCH-architecture.md § "Boundary discipline": each
+# lib/wild/<namespace>/ is a Packwerk package with its own package.yml
+# declaring its allowed dependencies. Cross-namespace imports that
+# violate the ADR-0003 graph fail `bundle exec packwerk check`.
 #
 # Run: bundle exec packwerk check
+#
+# Note: CI marks the Packwerk job `continue-on-error: true` until Role 8
+# lands spec/dummy/ in P2 — Packwerk requires Rails-app context to boot.
+# Locally `bundle exec packwerk check` works when invoked from a host
+# Rails app that mounts Wild::Engine.
 
 include:
   - "lib/wild/**/*.rb"
@@ -19,7 +25,19 @@ exclude:
   - "lib/wild/engine.rb"
   - "lib/wild.rb"
 
+# Root + per-namespace packages.
+# Each entry is a glob that matches a directory containing a package.yml.
 package_paths:
-  - "lib/wild"
+  - "."
+  - "lib/wild/hooks"
+  - "lib/wild/skillops"
+  - "lib/wild/telemetry/collector"
+  - "lib/wild/telemetry/pipeline"
+  - "lib/wild/telemetry/analysis"
+  - "lib/wild/analyzers/permission"
+  - "lib/wild/analyzers/test_flakes"
+  - "lib/wild/capability_gate"
+  - "lib/wild/introspection"
+  - "lib/wild/admin_tools"
 
 custom_associations: []

@@ -41,11 +41,13 @@ Three layers enforce namespace integrity:
 
 | Layer | Mechanism | What it catches |
 |---|---|---|
-| 1 | Packwerk (`packwerk.yml` + per-namespace `package.yml`) | Cross-namespace imports not declared in `dependencies:` |
+| 1 | Packwerk (`packwerk.yml` + per-namespace `package.yml`; allowed-dependency graph in [ADR-0003](adr/ADR-0003-namespace-dependency-graph.md)) | Cross-namespace imports not declared in `dependencies:` |
 | 2 | RuboCop (`.rubocop.yml`) | Forbidden constants, missing `# frozen_string_literal: true`, conventions |
 | 3 | `# @api private` discipline | Symbols intended for internal use only; documented in CONTRIBUTING |
 
-A new top-level namespace requires an ADR amendment to ADR-0001. A new public API symbol on an existing namespace requires:
+The Packwerk graph is a four-tier DAG (Hooks → Telemetry / Analyzers / Skillops → CapabilityGate → Introspection + AdminTools); see [ADR-0003](adr/ADR-0003-namespace-dependency-graph.md) for the canonical edge list and rationale per edge.
+
+A new top-level namespace requires an ADR amendment to ADR-0001. A new inter-namespace edge requires an ADR amendment to ADR-0003. A new public API symbol on an existing namespace requires:
 
 1. Removing the `# @api private` tag
 2. Adding a CHANGELOG entry under that namespace's section

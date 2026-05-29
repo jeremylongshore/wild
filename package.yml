@@ -1,0 +1,14 @@
+# Root Packwerk package — engine substrate.
+#
+# Governs the top-level engine files (lib/wild.rb, lib/wild/engine.rb,
+# lib/wild/configuration.rb, lib/wild/error.rb, lib/wild/version.rb).
+# The packwerk.yml already excludes these from per-namespace checks; this
+# file declares the root package's identity so Packwerk's introspection sees
+# a complete graph.
+#
+# Per ADR-0003: the engine substrate is at "tier 0" — every namespace
+# inherits it; it depends on no namespace.
+
+enforce_dependencies: true
+enforce_privacy: false # engine substrate is intentionally public to all namespaces
+dependencies: []

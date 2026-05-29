@@ -1,0 +1,14 @@
+# Wild::Hooks — Tier 1 shared-concerns substrate.
+#
+# Per ADR-0003: bottom of the namespace dependency graph. Houses hook
+# lifecycle, channels-as-data-flow patterns (Pike), and concerns shared
+# across every other namespace. Depends on no other Wild::* namespace
+# by design.
+#
+# Anti-pattern to police: do NOT let this become a god-namespace. If a
+# pattern only one namespace uses, it stays in that namespace. Hooks is
+# for patterns ≥ 2 namespaces will use.
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies: []

@@ -1,0 +1,19 @@
+# Wild::Introspection — Tier 4 MCP transport surface.
+#
+# Per ADR-0003: safe runtime introspection (model schemas, routes,
+# config) over MCP. Shipped both as Rails-engine endpoint AND as
+# bin/wild-mcp-introspection standalone script (Karpathy-mandated
+# transport-host independence, MIN-Karpathy).
+#
+# F7: list_allowed_models discovery tool lives here (Role 9 P2).
+# MIN-Karpathy: tool descriptions versioned under prompts/introspection/;
+# response shapes under schemas/introspection/.
+#
+# Forbidden coupling per ADR-0003: must NOT reach into Wild::AdminTools
+# (both Tier 4; sibling namespaces).
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+  - "../hooks"
+  - "../capability_gate"
