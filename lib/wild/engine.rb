@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
-# Rails 8.1 has a load-order quirk where rails/engine pulls Rails::Initializable
-# before active_support core extensions (delegate_missing_to in particular) are
-# loaded. Requiring the core_ext file first avoids `NoMethodError:
-# undefined method 'delegate_missing_to'` on `require "rails/engine"`.
-require "active_support"
-require "active_support/core_ext/module/delegation"
-require "rails/engine"
+# Rails 8.1.x is not safe to load as `require "rails/engine"` standalone:
+#   1. rails/initializable.rb calls `delegate_missing_to` before active_support
+#      core_ext is loaded → NoMethodError
+#   2. rails/engine/configuration.rb#initialize references `ActionDispatch`
+#      without requiring it → NameError on `isolate_namespace`
+# The robust fix is `require "rails"` (the meta-gem loads the full transitive
+# Rails environment in correct order). Any consumer mounting Wild::Engine
+# already loads Rails in their app, so the heavier load isn't a net cost.
+require "rails"
 
 module Wild
   # Wild::Engine — the Rails engine entry point. `isolate_namespace Wild`
