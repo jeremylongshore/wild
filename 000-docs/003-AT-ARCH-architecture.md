@@ -47,6 +47,8 @@ Three layers enforce namespace integrity:
 
 The Packwerk graph is a four-tier DAG (Hooks → Telemetry / Analyzers / Skillops → CapabilityGate → Introspection + AdminTools); see [ADR-0003](adr/ADR-0003-namespace-dependency-graph.md) for the canonical edge list and rationale per edge.
 
+`lib/wild/schemas/` is shared data (YAML), not Ruby. It is intentionally **not a Packwerk package** — `packwerk.yml`'s `include: "lib/wild/**/*.rb"` glob already excludes it. The directory hosts cross-namespace data contracts (e.g., the F4-mandated `wildcard_corpus.yml` shared by `Wild::Analyzers::Permission` and `Wild::CapabilityGate`, and the `capability_gate/audit_event.yml` shape). Per [ADR-0003](adr/ADR-0003-namespace-dependency-graph.md), these shared data files form the schema-as-data substrate the council blessed under defense Point 6 — coupling through declared data, not through code reach-arounds.
+
 A new top-level namespace requires an ADR amendment to ADR-0001. A new inter-namespace edge requires an ADR amendment to ADR-0003. A new public API symbol on an existing namespace requires:
 
 1. Removing the `# @api private` tag
