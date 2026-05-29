@@ -31,8 +31,11 @@ RSpec.describe Wild::Configuration do
     end
 
     described_class::NAMESPACES.each do |ns|
-      it "returns a non-nil container for #{ns}" do
-        expect(config.public_send(ns)).not_to be_nil
+      it "returns a typed container for #{ns} (class name == camelized namespace)" do
+        container = config.public_send(ns)
+        expected_class_name = ns.to_s.split("_").map(&:capitalize).join
+        expect(container).not_to be_nil
+        expect(container.class.name).to end_with(expected_class_name)
       end
     end
   end

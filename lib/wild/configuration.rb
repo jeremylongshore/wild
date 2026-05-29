@@ -42,24 +42,28 @@ module Wild
   # public to every namespace; every namespace reads its own slice. No
   # namespace owns or mutates another namespace's settings at runtime.
   class Configuration
-    # Settings classes for each namespace. Each is a small typed Struct
-    # with keyword_init defaults. Mutation is expected during
-    # `Wild.configure { ... }` and read-only thereafter (the engine does
-    # not freeze the config — by design, so test code can override per
-    # example — but production code does not mutate post-boot).
+    # Settings classes for each namespace.
+    #
+    # Convention:
+    #   - Single-leaf namespaces are `Struct.new(..., keyword_init: true)`.
+    #     They default all settings to `nil` unless an `initialize` override
+    #     sets a council-blessed default (F2 hard_fail, F5 false, etc.).
+    #   - Multi-leaf namespaces (Telemetry, Analyzers) are plain Ruby classes
+    #     wrapping their leaf Structs via `attr_reader`. The wrapper class
+    #     instantiates each leaf with its own defaults.
+    #
+    # Mutation is expected during `Wild.configure { ... }` and read-only
+    # thereafter. The engine does not freeze the config (by design — so test
+    # code can override per example) but production code does not mutate
+    # post-boot.
 
+    # `allowed_models: nil` means "derive from access_policy_path"; the
+    # introspection runtime treats nil and empty-array distinctly.
     Introspection = Struct.new(
       :access_policy_path,
       :allowed_models,
       keyword_init: true
-    ) do
-      def initialize(**kwargs)
-        super(
-          access_policy_path: kwargs.fetch(:access_policy_path, nil),
-          allowed_models: kwargs.fetch(:allowed_models, nil) # nil = derive from policy
-        )
-      end
-    end
+    )
 
     AdminTools = Struct.new(
       :cache_adapter,
@@ -137,11 +141,9 @@ module Wild
         end
       end
 
-      TestFlakes = Struct.new(:classifier_corpus_path, keyword_init: true) do
-        def initialize(**kwargs)
-          super(classifier_corpus_path: kwargs.fetch(:classifier_corpus_path, nil))
-        end
-      end
+      # `classifier_corpus_path: nil` means "engineer must supply"; runtime
+      # raises Wild::Analyzers::Error if the classifier is invoked without a path.
+      TestFlakes = Struct.new(:classifier_corpus_path, keyword_init: true)
 
       attr_reader :permission, :test_flakes
 
