@@ -57,6 +57,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rubocop-rails", "~> 2.25"
   spec.add_development_dependency "rubocop-rspec", "~> 3.0"
   spec.add_development_dependency "simplecov", "~> 0.22"
-  spec.add_development_dependency "simplecov-cobertura", "~> 2.1"
+  # simplecov-cobertura 2.x has a Malformed XML self-parse bug. 3.x fixes it.
+  spec.add_development_dependency "simplecov-cobertura", "~> 3.1"
   spec.add_development_dependency "sqlite3", "~> 2.0"
 end
