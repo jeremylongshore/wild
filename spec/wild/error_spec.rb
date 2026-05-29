@@ -46,31 +46,25 @@ RSpec.describe Wild::Error do
 
     it "lets consumers rescue at the namespace level (catches all subclasses)" do
       expect do
-        begin
-          raise Wild::CapabilityGate::EvaluationError, "policy invalid"
-        rescue Wild::CapabilityGate::Error
-          # caught
-        end
+        raise Wild::CapabilityGate::EvaluationError, "policy invalid"
+      rescue Wild::CapabilityGate::Error
+        # caught
       end.not_to raise_error
     end
 
     it "lets consumers rescue at Wild::Error (catches every wild error)" do
       expect do
-        begin
-          raise Wild::Introspection::ForbiddenError, "policy denies model"
-        rescue Wild::Error
-          # caught
-        end
+        raise Wild::Introspection::ForbiddenError, "policy denies model"
+      rescue described_class
+        # caught
       end.not_to raise_error
     end
 
     it "lets consumers rescue at StandardError (Ruby-conventional)" do
       expect do
-        begin
-          raise Wild::Telemetry::Error, "collector queue overflow"
-        rescue StandardError
-          # caught
-        end
+        raise Wild::Telemetry::Error, "collector queue overflow"
+      rescue StandardError
+        # caught
       end.not_to raise_error
     end
   end
@@ -92,7 +86,7 @@ RSpec.describe Wild::Error do
       err = Wild::CapabilityGate::EvaluationError.new("policy fixture corrupt")
       expect(err).to be_a(Wild::CapabilityGate::EvaluationError)
       expect(err).to be_a(Wild::CapabilityGate::Error)
-      expect(err).to be_a(Wild::Error)
+      expect(err).to be_a(described_class)
       expect(err).to be_a(StandardError)
     end
   end
