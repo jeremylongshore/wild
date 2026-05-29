@@ -5,6 +5,11 @@ RSpec.describe Wild::Error do
   # This table IS the contract — adding/renaming a class without updating the
   # table fails the spec and forces a CHANGELOG entry under the affected
   # namespace (per the architecture doc's public-API rules).
+  #
+  # The table intentionally lists Wild::Error among many siblings, so
+  # `described_class` would obscure the table's structure. Cop disabled
+  # for the table literal only.
+  # rubocop:disable RSpec/DescribedClass
   error_table = {
     Wild::Error => [StandardError],
     Wild::ConfigurationError => [Wild::Error, StandardError],
@@ -24,6 +29,7 @@ RSpec.describe Wild::Error do
     Wild::Analyzers::Error => [Wild::Error, StandardError],
     Wild::Skillops::Error => [Wild::Error, StandardError]
   }.freeze
+  # rubocop:enable RSpec/DescribedClass
 
   describe "inheritance contract" do
     error_table.each do |klass, expected_ancestors|
