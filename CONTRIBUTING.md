@@ -184,9 +184,13 @@ module Wild
 end
 ```
 
-A consumer (or another namespace) calling a `# @api private` symbol gets no
-runtime error — Ruby has no enforcement — but the symbol is **not part of the
-public contract**. Breakage between releases is expected.
+A consumer calling a `# @api private` symbol gets no Ruby runtime error, but
+**Packwerk's `enforce_privacy: true`** (set in every namespace's `package.yml`,
+per ADR-0003) flags cross-namespace reads of these symbols at
+`bundle exec packwerk check` time. The YARD tag is the contract; Packwerk is
+the gate. Within-namespace use is unrestricted; cross-namespace use fails
+CI's boundary job. Breakage between releases for `# @api private` symbols is
+expected — they exist outside the public contract by design.
 
 #### When you want to add a public API symbol
 
@@ -235,8 +239,10 @@ is allowed but requires explicit re-engagement with the decision substrate.
 #### When Packwerk flags an import
 
 `bundle exec packwerk check` runs in CI (currently `continue-on-error: true`
-until Role 8 lands `spec/dummy/` in P2). Run it locally before pushing to
-avoid the post-merge surprise:
+until Role 8 lands `spec/dummy/` in P2). **Treat local Packwerk output as
+binding even while the CI job is informational** — the intentional friction
+this discipline relies on erodes during the soak window if contributors wait
+for CI to enforce it. Run locally before pushing:
 
 ```bash
 bundle exec packwerk check
