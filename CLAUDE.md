@@ -102,6 +102,27 @@ wild/
 - Per-namespace SemVer stamps inside the single gem's version.rb history (Beck Refinement #3)
 - `# @api private` discipline on internal symbols not intended for consumers
 
+## Secrets
+
+This repo follows the Intent Solutions SOPS + age standard. Encrypted secrets
+live in `.env.sops` and travel with the code. Decryption uses age (the engineer's
+private key at `~/.config/sops/age/keys.txt`; CI uses `SOPS_AGE_KEY` GH Actions
+secret). The wild gem itself ships no application secrets — the scaffolding is in
+place for when consumer-facing examples (sample Rails app with `wild` mounted)
+need them.
+
+| File | Role |
+|---|---|
+| `.sops.yaml` | Recipient list + encryption rules |
+| `.env.sops` | Encrypted secrets (committed); decrypts to env via `scripts/sops-env` |
+| `secrets.example.yaml` | Template of expected keys (no values) |
+| `scripts/sops-env` | Wrapper: decrypts to `/dev/shm` tmpfs, sources into env, wipes |
+
+Never commit a plaintext `.env`. The `eval ... | sed` pattern documented in
+the global CLAUDE.md (anchored regex only) is the correct way to source. The
+`sops -d | sed 's/^/export /'` pattern is forbidden (leaks all envvars to stdout
+if any blank/comment line slips through).
+
 ## Out of scope here
 
 - Per-namespace implementation details — those live in each `lib/wild/<namespace>/` directory's own notes
