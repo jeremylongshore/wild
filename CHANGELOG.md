@@ -27,6 +27,8 @@ section splits into a separate file.
 - Namespace directory placeholders under `lib/wild/`
 - ADR-0001 (topology — one gem, ten namespaces)
 - ADR-0002 (namespace extraction policy)
+- ADR-0003 (namespace dependency graph — four-tier DAG; Role 4 PR-A)
+- Root `package.yml` + ten per-namespace `package.yml` files encoding the ADR-0003 dependency contract; `packwerk.yml` lists each package path
 - 6-doc enterprise planning set under `000-docs/`
 
 ### Wild::Introspection

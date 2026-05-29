@@ -1,0 +1,14 @@
+# Wild::Telemetry::Collector — Tier 1 telemetry ingest.
+#
+# Per ADR-0003: privacy-aware session/event ingestion. Emits unstructured
+# events; Pipeline normalizes them in the next tier.
+#
+# F7 (boundary normalization): Collector MUST NOT be imported directly by
+# Wild::Telemetry::Analysis. Analysis consumes only normalized Pipeline
+# events. This package.yml enforces that contract — Collector is NOT in
+# Analysis's dependency list.
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+  - "../../hooks"

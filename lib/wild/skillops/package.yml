@@ -1,0 +1,11 @@
+# Wild::Skillops — Tier 2 internal namespace (F5).
+#
+# Per ADR-0003 + council F5: downgraded from the old wild-skillops-registry
+# gem's v0.1.0 claims. NO atomicity, NO durability claims. Default
+# disabled via Wild.config.skillops.enabled = false. Earns its own
+# gemspec (per ADR-0002) only when a real external consumer appears.
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+  - "../hooks"

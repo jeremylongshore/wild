@@ -1,0 +1,11 @@
+# Wild::Telemetry::Pipeline — Tier 1 telemetry normalization.
+#
+# Per ADR-0003: takes Collector's heterogeneous events and emits canonical
+# events with sequence numbers (Kleppmann's most-leveraged concession,
+# F7 fix). Only downstream consumer of Collector inside the gem.
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+  - "../../hooks"
+  - "../collector"

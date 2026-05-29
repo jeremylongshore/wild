@@ -1,0 +1,19 @@
+# Wild::AdminTools — Tier 4 admin operations over MCP.
+#
+# Per ADR-0003: privileged admin tools. Every public method MUST pass
+# through Wild::CapabilityGate#evaluate on at least one taint path
+# (council canonical; future custom CodeQL query
+# rb/wild/capability-gate-required will enforce this at AST level).
+#
+# DI container around Rails.cache / ActiveJob::Base / Flipper was DELETED
+# per DHH Week 2 plan; adapters are defaulted in this namespace's
+# configuration. Override points remain for consumers who need them.
+#
+# Forbidden coupling per ADR-0003: must NOT reach into Wild::Introspection
+# (both Tier 4; sibling namespaces).
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+  - "../hooks"
+  - "../capability_gate"

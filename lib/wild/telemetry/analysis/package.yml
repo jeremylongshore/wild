@@ -1,0 +1,14 @@
+# Wild::Telemetry::Analysis — Tier 2 gap detection.
+#
+# Per ADR-0003: consumes Pipeline-normalized events. NEVER imports
+# Collector directly (F7 enforcement — reaching past Pipeline bypasses
+# the normalization seam).
+#
+# F8 (decomplect identity/value/time): Gap = (UUID, immutable record,
+# sequence number). This package's design is the locus of F8 work.
+
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+  - "../../hooks"
+  - "../pipeline"
