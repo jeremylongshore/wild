@@ -62,6 +62,22 @@ section splits into a separate file.
 
 ### Wild::Hooks
 
+- **MCP server substrate landed** (`Wild::Hooks::McpServer`) — Tier 1
+  transport substrate per ADR-0003. Two public APIs:
+  - `Wild::Hooks::McpServer::Factory.create(name:, version:, tools:, server_context: {})`
+    consolidates the `MCP::Server.new(...)` boilerplate that lived
+    independently in `wild-rails-safe-introspection-mcp` and
+    `wild-admin-tools-mcp`.
+  - `Wild::Hooks::McpServer::ToolHandler.wrap { ... }` consolidates the
+    `rescue StandardError` outer wrapper that both gems' `ToolHandler.execute`
+    paths had. Per-namespace identity / capability-gate / pipeline logic
+    STAYS in the namespaces; only the rescue + format-via-callback pattern
+    is shared (consumer supplies `error_formatter:`).
+  - `mcp ~> 0.8` added as a runtime dependency (was already a runtime dep
+    in both old gems' gemspecs).
+  - Closes the substrate-extraction portion of wild-rvv.6.1. When the
+    introspection + admin_tools moves land in their respective Role 5 PRs,
+    they will consume this substrate and drop their own duplicates.
 - Moved 14 source files from `wild-hook-ops/lib/wild_hook_ops/` into
   `lib/wild/hooks/` under the `Wild::Hooks::*` namespace (Role 5 PR-1).
   Layout preserved verbatim: `models/`, `registry/`, `execution/`,
