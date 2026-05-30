@@ -62,7 +62,34 @@ section splits into a separate file.
 
 ### Wild::Hooks
 
-- _(pending: P1 code move from `wild-hook-ops`)_
+- Moved 14 source files from `wild-hook-ops/lib/wild_hook_ops/` into
+  `lib/wild/hooks/` under the `Wild::Hooks::*` namespace (Role 5 PR-1).
+  Layout preserved verbatim: `models/`, `registry/`, `execution/`,
+  `lifecycle/`, `health/`, `audit/` sub-directories with the same files,
+  just renamed at the module level. Loader at `lib/wild/hooks.rb` replaces
+  the old `wild_hook_ops.rb` entry point.
+- 16 specs + 1 integration + 1 adversarial + 1 fixtures module moved to
+  `spec/wild/hooks/` and `spec/support/wild_hooks/`. `Wild::Hooks::TestSupport::HookFixtures`
+  wired into `spec/spec_helper.rb`.
+- Collapsed the old `WildHookOps::Configuration` class into
+  `Wild::Configuration::Hooks` (F1). Seven knobs now on `Wild.config.hooks`:
+  `default_timeout_ms` (5000), `max_handlers_per_hook` (20), `enable_audit_logging`
+  (true), `max_audit_entries` (10_000), `execution_mode` (:sequential),
+  `on_handler_error` (:log_and_continue), `lifecycle` (:rails_engine).
+  Defaults preserved verbatim from the old gem. The old gem's per-setter
+  type validation + `freeze!`/`frozen?` machinery is NOT carried over —
+  filed as Role 6 follow-up under wild-rvv.6.
+- Collapsed the old `WildHookOps` error tree (6 classes) into the
+  `Wild::Hooks::Error` hierarchy (MIN-Armstrong). Four subclasses now under
+  `Wild::Hooks::Error`: `HookNotFoundError`, `DuplicateHookError`,
+  `HandlerLimitExceededError`, `InvalidHandlerError`. The old gem's
+  `InvalidConfigurationError` + `ConfigurationFrozenError` are subsumed by
+  `Wild::ConfigurationError` (Wild engine no longer freezes config — by
+  design per architecture doc).
+- Closes wild-rvv.6 base move. The two children (wild-rvv.6.1 MCP server
+  scaffold + wild-rvv.6.2 audit-logging) remain open — they extract shared
+  patterns from the introspection + admin_tools gems into this same
+  namespace in follow-up PRs.
 
 ### Wild::Analyzers::Permission
 

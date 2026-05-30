@@ -26,6 +26,10 @@ RSpec.describe Wild::Error do
     Wild::AdminTools::Error => [Wild::Error, StandardError],
     Wild::Telemetry::Error => [Wild::Error, StandardError],
     Wild::Hooks::Error => [Wild::Error, StandardError],
+    Wild::Hooks::HookNotFoundError => [Wild::Hooks::Error, Wild::Error, StandardError],
+    Wild::Hooks::DuplicateHookError => [Wild::Hooks::Error, Wild::Error, StandardError],
+    Wild::Hooks::HandlerLimitExceededError => [Wild::Hooks::Error, Wild::Error, StandardError],
+    Wild::Hooks::InvalidHandlerError => [Wild::Hooks::Error, Wild::Error, StandardError],
     Wild::Analyzers::Error => [Wild::Error, StandardError],
     Wild::Skillops::Error => [Wild::Error, StandardError]
   }.freeze
