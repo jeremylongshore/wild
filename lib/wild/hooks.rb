@@ -37,9 +37,13 @@ require "wild/hooks/lifecycle/manager"
 require "wild/hooks/health/monitor"
 require "wild/hooks/health/reporter"
 
-# Audit — ring-buffer trail and event logger.
+# Audit — ring-buffer trail + event logger (from wild-hook-ops) plus
+# shared sanitizer + timer substrate consumed by introspection,
+# admin_tools, and capability_gate emitters.
 require "wild/hooks/audit/trail"
 require "wild/hooks/audit/logger"
+require "wild/hooks/audit/sanitizer"
+require "wild/hooks/audit/timer"
 
 # MCP server — transport-layer substrate consumed by Wild::Introspection +
 # Wild::AdminTools. Pulls in the `mcp` gem on first load (per wild.gemspec).
