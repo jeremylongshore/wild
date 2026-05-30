@@ -40,3 +40,7 @@ require "wild/hooks/health/reporter"
 # Audit — ring-buffer trail and event logger.
 require "wild/hooks/audit/trail"
 require "wild/hooks/audit/logger"
+
+# MCP server — transport-layer substrate consumed by Wild::Introspection +
+# Wild::AdminTools. Pulls in the `mcp` gem on first load (per wild.gemspec).
+require "wild/hooks/mcp_server"
