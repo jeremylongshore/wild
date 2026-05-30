@@ -46,7 +46,32 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
-- _(pending: P1 code move from `wild-capability-gate` + F2 audit-blind fix)_
+- Moved 18 source files from `wild-capability-gate/lib/wild/capability_gate/`
+  into `lib/wild/capability_gate/` under the existing `Wild::CapabilityGate`
+  namespace. The source gem already used proper lexical module nesting and
+  the correct `lib/wild/capability_gate/` path layout, so the move is
+  effectively a copy + entry-loader cleanup with no namespace renames.
+  Layout preserved verbatim: `audit/`, `evaluator/`, `prerequisites/`,
+  `registry/`, `session/` sub-directories. Closes `wild-rvv.4` base move
+  (Role 5 PR-4).
+- Moved 18 spec files (unit + integration + safety + governance) to
+  `spec/wild/capability_gate/{,integration,safety}/`. 11 YAML fixtures
+  moved to `spec/fixtures/`. Three specs had their fixture-resolution
+  paths updated from `'../fixtures/config'` to `'../../../fixtures/config'`
+  to account for the deeper nesting under `spec/wild/capability_gate/`.
+- Deleted the duplicate `version.rb` (F1 — gem version is canonical at
+  `Wild::VERSION`). Updated `spec/wild/capability_gate_spec.rb` smoke
+  test to assert `Wild::VERSION` instead of the removed
+  `Wild::CapabilityGate::VERSION`.
+- The `Wild::CapabilityGate::Error` hierarchy (DeniedError, PolicyError,
+  EvaluationError) already exists from PR-C (MIN-Armstrong) — the moved
+  code's three internal error classes (`Registry::DuplicateCapabilityError`,
+  `Registry::ConfigLoader::ConfigError`, `Evaluator::GrantLoader::GrantConfigError`)
+  remain as-is per Beck Tidy-First (re-parenting them to `PolicyError`
+  would be a behavior change for a follow-up).
+- F2 audit-blind fix is **explicitly NOT in this PR** — that's `wild-rvv.4.1`
+  (Role 6). This PR is the structure-only move that Role 6's behavior
+  change lands on top of, per Role 5 doc § "Validation gate".
 
 ### Wild::Telemetry::Collector
 

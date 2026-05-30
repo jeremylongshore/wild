@@ -1,0 +1,3 @@
+capabilities:
+  - name: broken
+    description: [unterminated

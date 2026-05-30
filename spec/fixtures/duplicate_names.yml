@@ -1,0 +1,8 @@
+capabilities:
+  - name: introspection
+    description: "First definition"
+    risk_level: standard
+
+  - name: introspection
+    description: "Duplicate name"
+    risk_level: elevated

@@ -1,0 +1,3 @@
+capabilities:
+  - description: "Missing the name field"
+    risk_level: standard
