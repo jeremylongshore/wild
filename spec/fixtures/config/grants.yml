@@ -1,0 +1,14 @@
+grants:
+  - caller: "service-account:introspection-agent"
+    capabilities:
+      - basic_introspection
+      - privileged_introspection
+
+  - caller: "service-account:admin-agent"
+    capabilities:
+      - basic_introspection
+      - admin_tools
+
+  - caller: "*"
+    capabilities:
+      - basic_introspection

@@ -1,0 +1,22 @@
+capabilities:
+  - name: basic_introspection
+    description: "Read-only schema inspection"
+    risk_level: standard
+    prerequisites: []
+
+  - name: privileged_introspection
+    description: "Full runtime introspection including live data"
+    risk_level: elevated
+    prerequisites:
+      - type: file_exists
+        path: "config/safety-attestation-introspection.md"
+
+  - name: admin_tools
+    description: "Administrative operations on the target application"
+    risk_level: critical
+    prerequisites:
+      - type: file_exists
+        path: "config/safety-attestation-admin.md"
+      - type: config_value
+        key: admin_tools_enabled
+        value: true

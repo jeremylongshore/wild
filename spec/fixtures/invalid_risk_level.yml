@@ -1,0 +1,4 @@
+capabilities:
+  - name: bad_capability
+    description: "Has an invalid risk level"
+    risk_level: extreme
