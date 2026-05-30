@@ -62,6 +62,29 @@ section splits into a separate file.
 
 ### Wild::Hooks
 
+- **Audit substrate extension landed** — closes the structural-duplication
+  portion of `wild-rvv.6.2`. Two new classes/modules under the existing
+  `Wild::Hooks::Audit` namespace (which already hosts `Trail` + `Logger`
+  from PR #20):
+  - `Wild::Hooks::Audit::Sanitizer` — generic key-pattern parameter
+    sanitizer extracted from `wild-admin-tools-mcp`'s reusable design.
+    Configurable `redact_keys` (defaults cover password / secret /
+    token / api_key / private_key / ssn / credit_card / email / phone /
+    address) and `hash_keys` (defaults: job_id / actor_id / user_id /
+    account_id → SHA-256 fingerprint). Recurses into nested hashes,
+    does not mutate input. Introspection's per-tool dispatch sanitizer
+    stays in `Wild::Introspection::Audit::*` (different shape entirely)
+    and can wrap this Sanitizer for its redaction layer when that
+    namespace moves.
+  - `Wild::Hooks::Audit::Timer` — `Process::CLOCK_MONOTONIC` wrapper
+    that both old gems inlined inline at every emission site. Provides
+    `.now` + `.elapsed_ms(start)` for measuring `audit_emit_ms` (F2
+    audit-liveness metric per architecture doc). Consumed by the F2
+    emitter Wild::CapabilityGate will use when wild-rvv.4.1 lands.
+  - The two `recorder.rb` files in introspection + admin_tools were
+    intentionally NOT pulled up — they're too divergent (hash-result vs
+    object-result, swallow-errors vs re-raise, different domain attrs).
+    Forcing them together would be a false abstraction.
 - **MCP server substrate landed** (`Wild::Hooks::McpServer`) — Tier 1
   transport substrate per ADR-0003. Two public APIs:
   - `Wild::Hooks::McpServer::Factory.create(name:, version:, tools:, server_context: {})`
