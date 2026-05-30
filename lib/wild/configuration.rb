@@ -126,10 +126,32 @@ module Wild
       end
     end
 
-    Hooks = Struct.new(:lifecycle, keyword_init: true) do
+    # Hooks consolidates the seven knobs the old wild-hook-ops gem exposed
+    # plus the engine-shape `lifecycle` flag. Defaults preserve old-gem
+    # behavior verbatim so the Role 5 move is structure, not behavior.
+    # (Validation that the old setters performed at write time is dropped
+    # here — flagged for follow-up under wild-rvv.6 children.)
+    Hooks = Struct.new(
+      :default_timeout_ms,
+      :max_handlers_per_hook,
+      :enable_audit_logging,
+      :max_audit_entries,
+      :execution_mode,
+      :on_handler_error,
+      :lifecycle,
+      keyword_init: true
+    ) do
       def initialize(**kwargs)
-        # :rails_engine when mounted in Rails; :standalone for bin-script consumers
-        super(lifecycle: kwargs.fetch(:lifecycle, :rails_engine))
+        super(
+          default_timeout_ms: kwargs.fetch(:default_timeout_ms, 5_000),
+          max_handlers_per_hook: kwargs.fetch(:max_handlers_per_hook, 20),
+          enable_audit_logging: kwargs.fetch(:enable_audit_logging, true),
+          max_audit_entries: kwargs.fetch(:max_audit_entries, 10_000),
+          execution_mode: kwargs.fetch(:execution_mode, :sequential),
+          on_handler_error: kwargs.fetch(:on_handler_error, :log_and_continue),
+          # :rails_engine when mounted in Rails; :standalone for bin-script consumers
+          lifecycle: kwargs.fetch(:lifecycle, :rails_engine)
+        )
       end
     end
 

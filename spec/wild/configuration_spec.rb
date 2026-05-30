@@ -106,6 +106,32 @@ RSpec.describe Wild::Configuration do
   describe Wild::Configuration::Hooks do
     subject(:hooks) { described_class.new }
 
+    # Defaults preserved verbatim from the old wild-hook-ops gem's
+    # Configuration so the Role 5 move is behavior-equivalent.
+    it "defaults default_timeout_ms to 5_000" do
+      expect(hooks.default_timeout_ms).to eq(5_000)
+    end
+
+    it "defaults max_handlers_per_hook to 20" do
+      expect(hooks.max_handlers_per_hook).to eq(20)
+    end
+
+    it "defaults enable_audit_logging to true" do
+      expect(hooks.enable_audit_logging).to be(true)
+    end
+
+    it "defaults max_audit_entries to 10_000" do
+      expect(hooks.max_audit_entries).to eq(10_000)
+    end
+
+    it "defaults execution_mode to :sequential" do
+      expect(hooks.execution_mode).to eq(:sequential)
+    end
+
+    it "defaults on_handler_error to :log_and_continue" do
+      expect(hooks.on_handler_error).to eq(:log_and_continue)
+    end
+
     it "defaults lifecycle to :rails_engine" do
       expect(hooks.lifecycle).to eq(:rails_engine)
     end
