@@ -343,6 +343,30 @@ section splits into a separate file.
 
 ### Wild::Analyzers::Permission
 
+- **`detect_cycle` false-positive fixed** (Fowler review findings 1 + 10 —
+  his most-costly-to-recover-from finding; Role 6 PR-2, `wild-jzg` under
+  `wild-rvv.7`). `PrerequisiteAnalyzer#detect_cycle` used a
+  `depth > max_prerequisite_depth` short-circuit that fabricated a
+  `:circular_prerequisite/critical` finding for ANY acyclic chain deeper than
+  the limit (default 10) — "a security tool that invents critical findings
+  teaches operators to ignore critical findings." It also re-discovered each
+  real cycle once per node on it (path-local `visited` + per-node re-entry).
+  Replaced with an **iterative tri-color DFS** (WHITE/GRAY/BLACK global state,
+  explicit frame stack — no recursion-depth ceiling): a back-edge to a GRAY
+  (on-stack) node is the only cycle signal, and each ring is reported exactly
+  once via a rotation-invariant signature. The depth limit is gone (it was the
+  bug, not a safety feature); `max_prerequisite_depth` remains a reserved
+  config knob, no longer wired to cycle detection.
+- **Test discipline** (Beck + Fowler gate): the former
+  "max_prerequisite_depth prevents infinite loops" example — which built a
+  15-deep acyclic chain, set the limit to 5, and asserted only `not_to
+  raise_error`, thereby documenting the false positive as a feature — was
+  **deleted**. Replaced with: a 15-deep-straight-line guard (zero
+  `:circular_prerequisite` findings, even with the knob set low), 2-node +
+  3-node cycle "reported exactly once" specs, a diamond (shared-but-acyclic)
+  guard, and a `full_audit_spec` integration test proving a deep acyclic chain
+  yields zero critical findings. All written failing-first against the buggy
+  code, then green after the fix.
 - Moved 17 source files from `wild-permission-analyzer/lib/wild_permission_analyzer/`
   into `lib/wild/analyzers/permission/` under the 3-deep `Wild::Analyzers::Permission::*`
   namespace (Role 5 PR-6). Sub-directories preserved: `models/`, `loaders/`,

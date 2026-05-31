@@ -54,6 +54,30 @@ RSpec.describe "Full audit pipeline" do
     expect(orphan_caps).to include("admin.users.delete", "admin.system.shutdown")
   end
 
+  # Fowler finding 1, the documenting integration test: an operator-grade audit
+  # run against a deep ACYCLIC prerequisite chain must produce zero critical
+  # findings. Before the tri-color DFS fix, a chain deeper than
+  # max_prerequisite_depth fabricated a :circular_prerequisite/critical finding.
+  it "produces zero critical findings for a deep acyclic prerequisite chain" do
+    chain = (1..15).map do |i|
+      prereqs = i < 15 ? ["cap.#{i + 1}"] : []
+      { "name" => "cap.#{i}", "description" => "link #{i}", "risk_level" => "low",
+        "prerequisites" => prereqs, "tags" => [] }
+    end
+    deep_caps = write_capabilities_yaml(chain, tmpdir)
+    deep_grants = write_grants_yaml(
+      [{ "caller_id" => "svc", "capabilities" => ["cap.1"], "context" => {}, "expires_at" => nil }],
+      tmpdir
+    )
+
+    report = Wild::Analyzers::Permission.audit(
+      capabilities_path: deep_caps, grants_path: deep_grants
+    )
+
+    expect(report.findings.count { |f| f.type == :circular_prerequisite }).to eq(0)
+    expect(report.findings.count { |f| f.severity == :critical }).to eq(0)
+  end
+
   it "can be exported to JSON" do
     report = Wild::Analyzers::Permission.audit(
       capabilities_path: caps_path, grants_path: grants_path
