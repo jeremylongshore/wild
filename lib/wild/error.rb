@@ -92,6 +92,23 @@ module Wild
       # Raised when the backing store cannot persist or read events.
       class StorageError < Error; end
     end
+
+    # Pipeline sub-namespace errors (from wild-transcript-pipeline).
+    module Pipeline
+      class Error < Wild::Telemetry::Error; end
+
+      # Raised when an ingestion adapter cannot parse its input.
+      class IngestionError < Error; end
+
+      # Raised when turn/intent/tool normalization fails.
+      class NormalizationError < Error; end
+
+      # Raised when privacy redaction fails.
+      class PrivacyError < Error; end
+
+      # Raised when transcript export fails.
+      class ExportError < Error; end
+    end
   end
 
   module Hooks

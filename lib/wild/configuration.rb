@@ -122,9 +122,32 @@ module Wild
         end
       end
 
-      Pipeline = Struct.new(:sequence_strategy, keyword_init: true) do
+      # Pipeline carries the transcript-pipeline knobs the old gem exposed
+      # plus the PR-B `sequence_strategy` flag. Defaults preserved verbatim;
+      # the gem's per-setter validation + freeze! machinery is NOT carried
+      # over (no-freeze design).
+      Pipeline = Struct.new(
+        :sequence_strategy,
+        :intent_confidence_threshold,
+        :max_turn_content_length,
+        :max_turns_per_transcript,
+        :redaction_marker,
+        :strip_absolute_paths,
+        :strip_file_contents,
+        :custom_patterns,
+        keyword_init: true
+      ) do
         def initialize(**kwargs)
-          super(sequence_strategy: kwargs.fetch(:sequence_strategy, :ingest_order))
+          super(
+            sequence_strategy: kwargs.fetch(:sequence_strategy, :ingest_order),
+            intent_confidence_threshold: kwargs.fetch(:intent_confidence_threshold, 0.5),
+            max_turn_content_length: kwargs.fetch(:max_turn_content_length, 10_000),
+            max_turns_per_transcript: kwargs.fetch(:max_turns_per_transcript, 1_000),
+            redaction_marker: kwargs.fetch(:redaction_marker, "[REDACTED]"),
+            strip_absolute_paths: kwargs.fetch(:strip_absolute_paths, true),
+            strip_file_contents: kwargs.fetch(:strip_file_contents, true),
+            custom_patterns: kwargs.fetch(:custom_patterns, [])
+          )
         end
       end
 
