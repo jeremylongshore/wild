@@ -124,6 +124,19 @@ RSpec.describe Wild::Configuration do
     it "Analysis defaults gap_threshold to 0.7" do
       expect(telemetry.analysis.gap_threshold).to eq(0.7)
     end
+
+    # Gap-miner thresholds carried from the old wild-gap-miner gem (Role 5
+    # PR-10). Defaults preserved verbatim from the gem's DEFAULTS hash.
+    it "Analysis carries the gap-miner thresholds with their old-gem defaults" do # rubocop:disable RSpec/MultipleExpectations
+      expect(telemetry.analysis.denial_threshold).to eq(0.2)
+      expect(telemetry.analysis.failure_threshold).to eq(0.15)
+      expect(telemetry.analysis.latency_p95_threshold_ms).to eq(500.0)
+      expect(telemetry.analysis.utilization_min_count).to eq(5)
+      expect(telemetry.analysis.coverage_min_fraction).to eq(0.3)
+      expect(telemetry.analysis.pattern_min_occurrences).to eq(3)
+      expect(telemetry.analysis.max_gaps_per_type).to eq(50)
+      expect(telemetry.analysis.severity_weights[:denial]).to eq(1.0)
+    end
   end
 
   describe Wild::Configuration::Hooks do

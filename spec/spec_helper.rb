@@ -48,14 +48,28 @@ require_relative "support/wild_analyzers_permission/fixtures"
 require_relative "support/wild_analyzers_test_flakes/fixtures"
 require_relative "support/wild_telemetry_collector/event_fixtures"
 require_relative "support/wild_telemetry_pipeline/fixtures"
+require_relative "support/wild_telemetry_analysis/telemetry_fixtures"
 
 RSpec.configure do |config|
-  config.include Wild::Hooks::TestSupport::HookFixtures
-  config.include Wild::Skillops::TestSupport::Fixtures
-  config.include Wild::Analyzers::Permission::TestSupport::Fixtures
-  config.include Wild::Analyzers::TestFlakes::TestSupport::Fixtures
-  config.include Wild::Telemetry::Collector::TestSupport::EventFixtures
-  config.include Wild::Telemetry::Pipeline::TestSupport::TranscriptFixtures
+  # Fixture modules are scoped to their own namespace's spec subtree by
+  # file_path. Several modules share helper names (e.g. build_event exists in
+  # both HookFixtures and the telemetry TelemetryFixtures) — a global include
+  # would let the last-loaded module shadow the others. Path-scoping keeps each
+  # namespace's helpers bound to its own specs.
+  config.include Wild::Hooks::TestSupport::HookFixtures,
+                 file_path: %r{spec/wild/hooks/}
+  config.include Wild::Skillops::TestSupport::Fixtures,
+                 file_path: %r{spec/wild/skillops/}
+  config.include Wild::Analyzers::Permission::TestSupport::Fixtures,
+                 file_path: %r{spec/wild/analyzers/permission/}
+  config.include Wild::Analyzers::TestFlakes::TestSupport::Fixtures,
+                 file_path: %r{spec/wild/analyzers/test_flakes/}
+  config.include Wild::Telemetry::Collector::TestSupport::EventFixtures,
+                 file_path: %r{spec/wild/telemetry/collector/}
+  config.include Wild::Telemetry::Pipeline::TestSupport::TranscriptFixtures,
+                 file_path: %r{spec/wild/telemetry/pipeline/}
+  config.include Wild::Telemetry::Analysis::TestSupport::TelemetryFixtures,
+                 file_path: %r{spec/wild/telemetry/analysis/}
   config.expect_with :rspec do |expectations|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true
   end

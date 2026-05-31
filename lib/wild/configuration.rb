@@ -151,9 +151,40 @@ module Wild
         end
       end
 
-      Analysis = Struct.new(:gap_threshold, keyword_init: true) do
+      ANALYSIS_DEFAULT_SEVERITY_WEIGHTS = {
+        denial: 1.0, failure: 1.0, latency: 1.0,
+        utilization: 1.0, coverage: 1.0, pattern: 1.0
+      }.freeze
+
+      # Analysis carries the gap-miner thresholds the old gem exposed plus the
+      # PR-B `gap_threshold` flag (placeholder — not read by the moved code;
+      # kept for back-compat). Defaults preserved verbatim from the gem's
+      # DEFAULTS hash; per-setter validation + freeze! machinery NOT carried
+      # over (no-freeze design).
+      Analysis = Struct.new(
+        :gap_threshold,
+        :denial_threshold,
+        :failure_threshold,
+        :latency_p95_threshold_ms,
+        :utilization_min_count,
+        :coverage_min_fraction,
+        :pattern_min_occurrences,
+        :max_gaps_per_type,
+        :severity_weights,
+        keyword_init: true
+      ) do
         def initialize(**kwargs)
-          super(gap_threshold: kwargs.fetch(:gap_threshold, 0.7))
+          super(
+            gap_threshold: kwargs.fetch(:gap_threshold, 0.7),
+            denial_threshold: kwargs.fetch(:denial_threshold, 0.2),
+            failure_threshold: kwargs.fetch(:failure_threshold, 0.15),
+            latency_p95_threshold_ms: kwargs.fetch(:latency_p95_threshold_ms, 500.0),
+            utilization_min_count: kwargs.fetch(:utilization_min_count, 5),
+            coverage_min_fraction: kwargs.fetch(:coverage_min_fraction, 0.3),
+            pattern_min_occurrences: kwargs.fetch(:pattern_min_occurrences, 3),
+            max_gaps_per_type: kwargs.fetch(:max_gaps_per_type, 50),
+            severity_weights: kwargs.fetch(:severity_weights, ANALYSIS_DEFAULT_SEVERITY_WEIGHTS.dup)
+          )
         end
       end
 

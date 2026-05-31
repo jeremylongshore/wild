@@ -109,6 +109,23 @@ module Wild
       # Raised when transcript export fails.
       class ExportError < Error; end
     end
+
+    # Analysis sub-namespace errors (from wild-gap-miner).
+    module Analysis
+      class Error < Wild::Telemetry::Error; end
+
+      # Raised when a telemetry export file cannot be parsed.
+      class ParseError < Error; end
+
+      # Raised when a record fails validation.
+      class ValidationError < Error; end
+
+      # Raised when an export record does not conform to its schema.
+      class SchemaError < Error; end
+
+      # Raised when gap-report export fails.
+      class ExportError < Error; end
+    end
   end
 
   module Hooks

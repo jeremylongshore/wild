@@ -139,7 +139,40 @@ section splits into a separate file.
 
 ### Wild::Telemetry::Analysis
 
-- _(pending: P1 code move from `wild-gap-miner`)_
+- Moved 25 source files from `wild-gap-miner/lib/wild_gap_miner/` into
+  `lib/wild/telemetry/analysis/` under the 3-deep
+  `Wild::Telemetry::Analysis::*` namespace (Role 5 PR-10; **completes the
+  three-gem `wild-rvv.5` Telemetry epic structure**). Sub-directories
+  preserved: `models/`, `ingestion/`, `analyzers/`, `scoring/`,
+  `recommendations/`, `report/`, `export/`. Module Zeitwerk-rewritten from
+  compact form. New loader at `lib/wild/telemetry/analysis.rb` carries the
+  `Wild::Telemetry::Analysis.analyze` convenience method (parse export →
+  build gap report) from the old gem entry point.
+- 25 specs (unit + adversarial + integration) moved to
+  `spec/wild/telemetry/analysis/`. `TelemetryFixtures` rewrapped as
+  `Wild::Telemetry::Analysis::TestSupport::TelemetryFixtures`; `HEADER_DATA`
+  constant refs + flat config setters rewritten to the nested API.
+- **F1 — `Wild::Configuration::Telemetry::Analysis` extended** from 1 setting
+  (`gap_threshold` from PR-B) to 9: the 8 old-gem thresholds (`denial_threshold`
+  0.2, `failure_threshold` 0.15, `latency_p95_threshold_ms` 500.0,
+  `utilization_min_count` 5, `coverage_min_fraction` 0.3,
+  `pattern_min_occurrences` 3, `max_gaps_per_type` 50, `severity_weights`
+  all-1.0 six-signal map) plus `gap_threshold`. Defaults verbatim from the
+  gem's DEFAULTS hash. Deleted `version.rb` + `configuration.rb`; orphaned
+  `configuration_spec.rb` removed.
+- **MIN-Armstrong — `Wild::Telemetry::Analysis::Error` subtree added**:
+  `ParseError`, `ValidationError`, `SchemaError`, `ExportError`. Old gem's
+  `ConfigurationError` subsumed by `Wild::ConfigurationError`.
+- **Fixture isolation fix** — all per-namespace fixture modules are now
+  `config.include`d scoped by `file_path` (not globally). `build_event`
+  collided between `Wild::Hooks::TestSupport::HookFixtures` and the telemetry
+  `TelemetryFixtures`; global includes let the last-loaded shadow the rest.
+  Path-scoping binds each namespace's helpers to its own specs.
+- Pre-existing complexity (`coverage_analyzer` AbcSize, `Gap` ParameterLists)
+  handled with localized inline disables — no refactor.
+- **NOT in this PR** (deferred, `wild-rvv.5` children): F7 (`5.1`), F8 (`5.2`),
+  MIN-Kleppmann (`5.3`), F6 export audit (`5.4`). Config validation + freeze
+  machinery dropped; 8 validation/freeze adversarial specs deleted per F3.
 
 ### Wild::Hooks
 
