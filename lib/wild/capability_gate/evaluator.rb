@@ -49,9 +49,31 @@ module Wild
 
         emit_audit(result, context)
         result
+      rescue StandardError => e
+        # F2 (council rev2, Armstrong): the decision logic raised — fail closed
+        # AND leave an audit trail. The prerequisite checkers are fail-closed
+        # today, so this is defense-in-depth: a corrupted registry/grant, a
+        # future checker bug, or Event construction blowing up must NOT produce
+        # a silent denial. Deny with reason :evaluation_error and emit the
+        # matching audit event before returning. Re-raise nothing — the gate
+        # never raises out of evaluate.
+        error_result = deny_evaluation_error(caller_id, capability_name, e)
+        emit_audit(error_result, context)
+        error_result
       end
 
       private
+
+      def deny_evaluation_error(caller_id, capability_name, error)
+        EvaluationResult.denied(
+          # caller_id / capability_name may not have coerced if the raise
+          # happened during coercion; String()/to_sym defensively.
+          capability_name: capability_name&.to_sym || :unknown,
+          caller_id: String(caller_id),
+          reason: :evaluation_error,
+          details: "evaluation failed: #{error.class}"
+        )
+      end
 
       def check_capability_known(caller_id, capability_name)
         return if @registry.known?(capability_name)
@@ -101,8 +123,10 @@ module Wild
 
       # Emit audit event if a writer is configured.
       # Called after every evaluation, before the result is returned to the caller.
-      # Audit failures are silently swallowed — a broken audit log must not
-      # cause the gate to raise exceptions (fail-closed still applies).
+      # An audit-write failure must not cause the gate to raise (fail-closed
+      # still applies) — but per F2 (council rev2) it must NOT be doubly silent
+      # either: the failure is logged to Wild.config.audit_logger so an
+      # audit-pipeline outage is itself observable. Audit failure ≠ silent.
       def emit_audit(result, context)
         return unless @audit_writer
 
@@ -110,9 +134,25 @@ module Wild
           result, registry: @registry, session_id: @session_id, context: context
         )
         @audit_writer.write(event)
+      rescue StandardError => e
+        log_audit_failure(e, result)
+        nil
+      end
+
+      def log_audit_failure(error, result)
+        logger = Wild.config.audit_logger
+        return unless logger.respond_to?(:error)
+
+        logger.error(
+          "[wild:capability_gate] audit emission failed: #{error.class}: #{error.message} " \
+          "(caller=#{result.caller_id.inspect} capability=#{result.capability_name.inspect} " \
+          "reason=#{result.reason.inspect})"
+        )
       rescue StandardError
-        # Audit write failure must not break evaluation.
-        # The result has already been computed; swallow and continue.
+        # The audit logger itself is broken. There is nowhere left to write;
+        # do not raise out of the gate. This is the one genuinely-terminal
+        # silent path, and it requires BOTH the audit writer AND the configured
+        # logger to be broken simultaneously.
         nil
       end
     end

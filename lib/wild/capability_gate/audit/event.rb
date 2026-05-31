@@ -11,7 +11,14 @@ module Wild
       # Every evaluation — allowed, denied, or errored — must produce one of these.
       # See 003-TQ-STND-governance-model.md Section 5 (audit completeness rule).
       class Event
-        VALID_RESULTS = %w[allowed denied].freeze
+        # `evaluation_error` is the F2 outcome (council rev2): when a `rescue`
+        # path in the gate denies because evaluation itself raised, the audit
+        # event records `evaluation_error` — distinct from an ordinary policy
+        # `denied` — so audit readers can tell "policy said no" apart from
+        # "the gate broke and failed closed". Hard-fail: an evaluation_error is
+        # always a denial. (The full audit_event.yml schema migration —
+        # decision_id / policy_version / audit_emit_ms — is wild-rvv.4.1.3.)
+        VALID_RESULTS = %w[allowed denied evaluation_error].freeze
 
         attr_reader :timestamp, :caller_id, :capability, :risk_level,
                     :result, :reason, :prerequisites_checked,
@@ -81,8 +88,18 @@ module Wild
               caller_id: evaluation_result.caller_id,
               capability: capability_name.to_s,
               risk_level: resolve_risk_level(capability_name, registry),
-              result: evaluation_result.allowed? ? "allowed" : "denied",
+              result: result_for(evaluation_result),
               reason: evaluation_result.reason&.to_s }
+          end
+
+          # F2: an evaluation_error denial records the distinct `evaluation_error`
+          # result, not the generic `denied`. Allowed → "allowed"; any other
+          # denial → "denied".
+          def result_for(evaluation_result)
+            return "allowed" if evaluation_result.allowed?
+            return "evaluation_error" if evaluation_result.reason == :evaluation_error
+
+            "denied"
           end
 
           def prerequisite_attrs(evaluation_result)
