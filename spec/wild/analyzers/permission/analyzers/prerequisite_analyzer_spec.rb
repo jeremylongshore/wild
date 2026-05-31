@@ -47,6 +47,68 @@ RSpec.describe Wild::Analyzers::Permission::Analyzers::PrerequisiteAnalyzer do
         finding = analyzer.analyze([cap_a, cap_b], []).find { |f| f.type == :circular_prerequisite }
         expect(finding.severity).to eq(:critical)
       end
+
+      # Fowler finding 1: a real 2-node cycle must be reported ONCE, not N times
+      # (the old path-local visited + per-node re-entry re-discovered each cycle
+      # from every node on it).
+      it "reports a 2-node cycle exactly once, not once per node on it" do
+        cap_a = Wild::Analyzers::Permission::Models::Capability.new(name: "a", prerequisites: ["b"])
+        cap_b = Wild::Analyzers::Permission::Models::Capability.new(name: "b", prerequisites: ["a"])
+        findings = analyzer.analyze([cap_a, cap_b], [])
+        expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(1)
+      end
+
+      it "detects a 3-node cycle a -> b -> c -> a" do
+        cap_a = Wild::Analyzers::Permission::Models::Capability.new(name: "a", prerequisites: ["b"])
+        cap_b = Wild::Analyzers::Permission::Models::Capability.new(name: "b", prerequisites: ["c"])
+        cap_c = Wild::Analyzers::Permission::Models::Capability.new(name: "c", prerequisites: ["a"])
+        findings = analyzer.analyze([cap_a, cap_b, cap_c], [])
+        expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(1)
+      end
+    end
+
+    context "with a long ACYCLIC prerequisite chain (Fowler finding 1 — false-positive guard)" do
+      # The bug: detect_cycle returned a fake [name, "..."] cycle for any chain
+      # deeper than max_prerequisite_depth. A 15-deep STRAIGHT LINE has no cycle
+      # and must produce ZERO :circular_prerequisite findings — even with the
+      # depth knob set low. "A security tool that invents critical findings
+      # teaches operators to ignore critical findings."
+      let(:deep_acyclic_chain) do
+        # cap.1 -> cap.2 -> ... -> cap.15 (cap.15 has no prerequisite — terminates)
+        (1..15).map do |i|
+          prereqs = i < 15 ? ["cap.#{i + 1}"] : []
+          Wild::Analyzers::Permission::Models::Capability.new(name: "cap.#{i}", prerequisites: prereqs)
+        end
+      end
+
+      it "produces ZERO circular_prerequisite findings for a 15-deep straight line" do
+        findings = analyzer.analyze(deep_acyclic_chain, [])
+        expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(0)
+      end
+
+      it "produces zero circular findings even when max_prerequisite_depth is set low" do
+        Wild.configure { |c| c.analyzers.permission.max_prerequisite_depth = 5 }
+        findings = described_class.new.analyze(deep_acyclic_chain, [])
+        expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(0)
+      end
+
+      it "terminates without raising" do
+        expect { analyzer.analyze(deep_acyclic_chain, []) }.not_to raise_error
+      end
+    end
+
+    context "with a diamond (shared-but-acyclic) prerequisite graph" do
+      # a -> {b, c}; b -> d; c -> d. d is reached twice but there is NO cycle.
+      # A naive 'seen this node before' check would false-positive here; tri-color
+      # DFS must not.
+      it "does not flag a diamond as circular" do
+        cap_a = Wild::Analyzers::Permission::Models::Capability.new(name: "a", prerequisites: %w[b c])
+        cap_b = Wild::Analyzers::Permission::Models::Capability.new(name: "b", prerequisites: ["d"])
+        cap_c = Wild::Analyzers::Permission::Models::Capability.new(name: "c", prerequisites: ["d"])
+        cap_d = Wild::Analyzers::Permission::Models::Capability.new(name: "d", prerequisites: [])
+        findings = analyzer.analyze([cap_a, cap_b, cap_c, cap_d], [])
+        expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(0)
+      end
     end
 
     context "when a grant includes a capability with an unsatisfiable prerequisite" do
@@ -70,18 +132,11 @@ RSpec.describe Wild::Analyzers::Permission::Analyzers::PrerequisiteAnalyzer do
       end
     end
 
-    context "when max_prerequisite_depth prevents infinite loops" do
-      it "terminates and flags a chain exceeding max depth" do
-        caps = (1..15).map do |i|
-          Wild::Analyzers::Permission::Models::Capability.new(
-            name: "cap.#{i}",
-            prerequisites: ["cap.#{i + 1}"]
-          )
-        end
-        Wild.configure { |c| c.analyzers.permission.max_prerequisite_depth = 5 }
-        analyzer = described_class.new
-        expect { analyzer.analyze(caps, []) }.not_to raise_error
-      end
-    end
+    # NOTE: the former "max_prerequisite_depth prevents infinite loops" example
+    # was deleted (Fowler finding 10) — it built a 15-deep ACYCLIC chain, set
+    # the depth limit to 5, and only asserted `not_to raise_error`, thereby
+    # documenting the false-positive as a feature. Tri-color DFS makes the
+    # depth limit unnecessary for cycle safety; the acyclic-chain guard above
+    # replaces it.
   end
 end
