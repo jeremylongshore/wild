@@ -237,13 +237,20 @@ module Wild
       # Fowler detect_cycle fix — wild-rvv.7 follow-up). Defaults preserved verbatim
       # from the old gem; the gem's per-setter validation + freeze! machinery is
       # NOT carried over (Wild's no-freeze configuration design).
+      #
+      # `max_prerequisite_depth` was REMOVED (wild-0e0): the Role 6 detect_cycle
+      # rework (Fowler findings 1+10, PR-2) replaced the depth-limited cycle check
+      # with tri-color DFS, leaving the knob wired to nothing. Dead config erodes
+      # trust in live config, so it was cut rather than left inert. A future
+      # "warn beyond operational depth" finding, if ever wanted, is a clean
+      # additive feature (new knob + :warning finding) under its own bead — not a
+      # reserved hook carried speculatively.
       Permission = Struct.new(
         :cycle_detection,
         :capabilities_path,
         :grants_path,
         :risk_levels,
         :wildcard_risk_threshold,
-        :max_prerequisite_depth,
         keyword_init: true
       ) do
         def initialize(**kwargs)
@@ -252,13 +259,7 @@ module Wild
             capabilities_path: kwargs.fetch(:capabilities_path, nil),
             grants_path: kwargs.fetch(:grants_path, nil),
             risk_levels: kwargs.fetch(:risk_levels, PERMISSION_DEFAULT_RISK_LEVELS.dup),
-            wildcard_risk_threshold: kwargs.fetch(:wildcard_risk_threshold, "medium"),
-            # NOTE: currently INERT. The Role 6 detect_cycle rework (Fowler
-            # findings 1+10, PR-2) replaced the depth-limited cycle check with
-            # tri-color DFS, so nothing reads this knob today. Retained as a
-            # reserved hook for a future "warn beyond operational depth"
-            # finding; decide-or-cut tracked under wild-0e0.
-            max_prerequisite_depth: kwargs.fetch(:max_prerequisite_depth, 10)
+            wildcard_risk_threshold: kwargs.fetch(:wildcard_risk_threshold, "medium")
           )
         end
       end

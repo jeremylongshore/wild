@@ -77,11 +77,14 @@ RSpec.describe Wild::Analyzers::Permission::Analyzers::PrerequisiteAnalyzer do
     end
 
     context "with a long ACYCLIC prerequisite chain (Fowler finding 1 — false-positive guard)" do
-      # The bug: detect_cycle returned a fake [name, "..."] cycle for any chain
-      # deeper than max_prerequisite_depth. A 15-deep STRAIGHT LINE has no cycle
-      # and must produce ZERO :circular_prerequisite findings — even with the
-      # depth knob set low. "A security tool that invents critical findings
-      # teaches operators to ignore critical findings."
+      # The bug: the old depth-limited check returned a fake [name, "..."] cycle
+      # for any chain deeper than the (now-removed, wild-0e0) max_prerequisite_depth
+      # knob. A 15-deep STRAIGHT LINE has no cycle and must produce ZERO
+      # :circular_prerequisite findings. Tri-color DFS is depth-agnostic, so there
+      # is no longer any knob whose value could reintroduce the false positive —
+      # the "set the depth low and it still passes" variant died with the knob.
+      # "A security tool that invents critical findings teaches operators to
+      # ignore critical findings."
       let(:deep_acyclic_chain) do
         # cap.1 -> cap.2 -> ... -> cap.15 (cap.15 has no prerequisite — terminates)
         (1..15).map do |i|
@@ -92,12 +95,6 @@ RSpec.describe Wild::Analyzers::Permission::Analyzers::PrerequisiteAnalyzer do
 
       it "produces ZERO circular_prerequisite findings for a 15-deep straight line" do
         findings = analyzer.analyze(deep_acyclic_chain, [])
-        expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(0)
-      end
-
-      it "produces zero circular findings even when max_prerequisite_depth is set low" do
-        Wild.configure { |c| c.analyzers.permission.max_prerequisite_depth = 5 }
-        findings = described_class.new.analyze(deep_acyclic_chain, [])
         expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(0)
       end
 

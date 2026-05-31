@@ -202,8 +202,10 @@ RSpec.describe Wild::Configuration do
       expect(analyzers.permission.wildcard_risk_threshold).to eq("medium")
     end
 
-    it "Permission defaults max_prerequisite_depth to 10" do
-      expect(analyzers.permission.max_prerequisite_depth).to eq(10)
+    # max_prerequisite_depth was removed (wild-0e0) — tri-color DFS made the
+    # depth knob inert; dead config was cut. No default to assert.
+    it "Permission does not expose a max_prerequisite_depth knob" do
+      expect(analyzers.permission).not_to respond_to(:max_prerequisite_depth)
     end
 
     it "TestFlakes defaults classifier_corpus_path to nil (engineer-supplied)" do
