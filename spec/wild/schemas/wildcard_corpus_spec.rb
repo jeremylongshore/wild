@@ -49,38 +49,36 @@ RSpec.describe "lib/wild/schemas/wildcard_corpus.yml" do
       end
     end
 
-    it "has Array matches + non_matches (may be empty for negation patterns)" do
+    it "has Array matches + non_matches (non_matches may be empty for universal '*')" do
       corpus.fetch("patterns").each do |entry|
         expect(entry.fetch("matches")).to be_an(Array)
+        expect(entry.fetch("matches")).not_to be_empty
         expect(entry.fetch("non_matches")).to be_an(Array)
       end
     end
   end
 
-  describe "F4 — same corpus loadable by both consumers" do
-    # Permission analyzer + CapabilityGate both consume this file. Verify
-    # the file's bytes are identical for both consumers by loading it twice
-    # from the canonical path (no per-namespace copy) and asserting
-    # structural equality. This is the smallest spec that catches a future
-    # accidental fork into two corpora.
-    it "loads identically when re-loaded" do
+  describe "F4 — single canonical corpus (no per-namespace fork)" do
+    # Capability-name wildcard matching lives in ONE namespace
+    # (Wild::Analyzers::Permission) per the wild-lkp reconciliation —
+    # CapabilityGate is exact-match by design. This is the smallest spec that
+    # catches a future accidental fork of the canonical file into two copies.
+    it "loads identically when re-loaded from the canonical path" do
       first = YAML.safe_load_file(corpus_path, permitted_classes: [])
       second = YAML.safe_load_file(corpus_path, permitted_classes: [])
       expect(first).to eq(second)
     end
   end
 
-  describe "documented wildcard forms" do
+  describe "documented wildcard forms (dotted glob — the grammar the matcher implements)" do
     let(:patterns) { corpus.fetch("patterns").map { |e| e.fetch("pattern") } }
 
     {
-      "exact" => "User",
-      "suffix wildcard" => "User::*",
-      "prefix wildcard" => "*::Admin",
-      "recursive wildcard" => "User::**",
-      "universal wildcard" => "*",
-      "negation" => "!User::Admin",
-      "middle wildcard" => "User::*::Profile"
+      "exact" => "admin.jobs.view",
+      "trailing wildcard" => "admin.jobs.*",
+      "top-level prefix wildcard" => "admin.*",
+      "middle wildcard" => "admin.*.retry",
+      "universal wildcard" => "*"
     }.each do |form_name, pattern|
       it "includes the #{form_name} form (#{pattern})" do
         expect(patterns).to include(pattern)

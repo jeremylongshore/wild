@@ -21,6 +21,12 @@ module Wild
         @caller_id == WILDCARD
       end
 
+      # Exact-symbol match BY DESIGN — CapabilityGate does NOT wildcard-match
+      # capability names (F4 reconciliation, wild-lkp). A grant lists the
+      # explicit capabilities it confers; capability-name wildcard expansion is
+      # Wild::Analyzers::Permission's job (the auditing layer), not the gate's
+      # (the runtime allow/deny). The only wildcard the gate honours is the
+      # caller wildcard "*" (see #wildcard? / #matches_caller?), a different axis.
       def grants_capability?(capability_name)
         @capabilities.include?(capability_name.to_sym)
       end

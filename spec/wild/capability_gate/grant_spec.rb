@@ -53,5 +53,23 @@ RSpec.describe Wild::CapabilityGate::Grant do
     it "returns false for ungranted capability" do
       expect(grant).not_to be_grants_capability(:delete)
     end
+
+    # F4 reconciliation (wild-lkp): CapabilityGate is exact-match BY DESIGN — it
+    # does NOT wildcard-expand capability names. A grant for :read confers only
+    # :read, never :read_something; wildcard expansion is the Permission
+    # analyzer's job. This pins the design decision so a future change can't
+    # silently smuggle glob semantics into the runtime gate.
+    it "does NOT treat a '*' capability as a wildcard (exact-symbol match only)" do
+      wild_grant = described_class.new(caller_id: "agent:test", capabilities: ["*"])
+      expect(wild_grant).to be_grants_capability(:*)
+      expect(wild_grant).not_to be_grants_capability(:read)
+      expect(wild_grant).not_to be_grants_capability(:anything_else)
+    end
+
+    it "does not prefix-match capability names" do
+      grant = described_class.new(caller_id: "agent:test", capabilities: %i[admin.jobs.view])
+      expect(grant).to be_grants_capability(:"admin.jobs.view")
+      expect(grant).not_to be_grants_capability(:"admin.jobs.retry")
+    end
   end
 end
