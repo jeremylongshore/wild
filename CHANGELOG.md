@@ -38,7 +38,42 @@ section splits into a separate file.
 
 ### Wild::Introspection
 
-- _(pending: P1 code move from `wild-rails-safe-introspection-mcp`)_
+- Moved 23 source files from `wild-rails-safe-introspection-mcp/lib/wild_rails_safe_introspection/`
+  into `lib/wild/introspection/` under the `Wild::Introspection::*` namespace
+  (Role 5 PR-11). Sub-directories preserved: `identity/`, `guard/`, `adapter/`,
+  `audit/`, `server/` (+ `server/tools/`). Module Zeitwerk-rewritten from
+  compact form. New loader at `lib/wild/introspection.rb` carries the
+  `.configure` / `.configuration` / `.reset!` accessors from the old gem entry.
+- 30 specs (unit + safety + adversarial + integration) moved to
+  `spec/wild/introspection/`. The gem tests against a live in-memory
+  ActiveRecord schema — `spec/spec_helper.rb` now establishes a throwaway
+  sqlite connection and loads the moved `test_schema` + `test_models` (global
+  but harmless to non-AR namespaces). `TestConfigHelper` rewrapped as
+  `Wild::Introspection::TestSupport::TestConfigHelper` and included +
+  `Wild::Introspection.reset!` / `ConnectionManager.reset!` before-hook both
+  `file_path`-scoped to introspection specs. Access-policy fixtures moved to
+  `spec/support/wild_introspection/fixtures/`.
+- **Configuration kept as a namespace object, NOT folded into the central
+  struct** (`wild-rvv.u16`). The gem's `Configuration` is a YAML policy loader
+  (`access_policy.yml` → per-model blocked columns / allowed models), not a
+  settings bag — collapsing it into `Wild::Configuration::Introspection` would
+  be a behavior change. It moves as `Wild::Introspection::Configuration` with
+  the `.configuration` accessor preserved; wiring the central typed struct's
+  `access_policy_path` into this loader at engine boot is a deferred Role 6/8
+  task (parallels admin_tools' `wild-rvv.3.1` adapter resolution). F1 still
+  holds — F1 closed the nine *settings-bag* singletons, which this is not.
+- **MIN-Armstrong — `Wild::Introspection::Error` subtree extended** with the
+  gem's `ConfigError`, `WriteAttemptError`, `QueryTimeoutError` (alongside the
+  PR-C `ForbiddenError` + `ModelNotAllowedError`). The gem's bare
+  `Error < StandardError` is replaced by `Wild::Introspection::Error <
+  Wild::Error` — still a StandardError descendant, so consumer rescue behavior
+  is preserved. `version.rb` deleted (F1); `server_factory` + `audit_record`
+  metadata `version:` → `Wild::VERSION`.
+- **NOT in this PR** (deferred per Beck Tidy-First / anti-scope): refactoring
+  `server/` to consume the `Wild::Hooks::McpServer` substrate and wiring the
+  `bin/wild-mcp-introspection` entry point are Role 9 (MCP/AI-seams); wiring
+  the gem's `Identity::CapabilityGate` *stub* to the real `Wild::CapabilityGate`
+  is a behavior change for a follow-up. The `server/` code moves verbatim.
 
 ### Wild::AdminTools
 

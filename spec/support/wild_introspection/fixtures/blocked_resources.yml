@@ -1,0 +1,21 @@
+version: 1
+
+blocked_models:
+  - CreditCard
+  - ApiKey
+
+blocked_columns:
+  - model: User
+    columns:
+      - password_digest
+      - otp_secret
+
+  - model: Account
+    columns:
+      - stripe_customer_id
+      - tax_id
+
+  - model: "*"
+    columns:
+      - ssn
+      - credit_card_number

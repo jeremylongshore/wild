@@ -1,0 +1,22 @@
+version: 1
+
+defaults:
+  max_rows: 50
+  query_timeout_ms: 5000
+
+allowed_models:
+  - name: Account
+    columns: all_except_blocked
+    max_rows: 100
+
+  - name: User
+    columns:
+      - id
+      - email
+      - name
+      - status
+      - created_at
+      - updated_at
+
+  - name: FeatureFlag
+    columns: all
