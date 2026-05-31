@@ -107,7 +107,35 @@ section splits into a separate file.
 
 ### Wild::Telemetry::Pipeline
 
-- _(pending: P1 code move from `wild-transcript-pipeline`)_
+- Moved 16 source files from `wild-transcript-pipeline/lib/wild_transcript_pipeline/`
+  into `lib/wild/telemetry/pipeline/` under the 3-deep
+  `Wild::Telemetry::Pipeline::*` namespace (Role 5 PR-9; second of three
+  Telemetry sub-namespace moves). Sub-directories preserved: `ingestion/`,
+  `normalization/`, `privacy/`, `models/`, `export/`. Module Zeitwerk-rewritten
+  from compact form. New loader at `lib/wild/telemetry/pipeline.rb` carries the
+  `Wild::Telemetry::Pipeline.process` convenience method (full ingest →
+  normalize → redact pipeline) from the old gem entry point.
+- 19 specs (unit + adversarial + integration) moved to
+  `spec/wild/telemetry/pipeline/`. `TranscriptFixtures` rewrapped as
+  `Wild::Telemetry::Pipeline::TestSupport::TranscriptFixtures`, wired into
+  spec_helper. Spec `WildTranscriptPipeline.process` calls + flat config
+  setters rewritten to the nested API.
+- **F1 — `Wild::Configuration::Telemetry::Pipeline` extended** from 1 setting
+  (`sequence_strategy` from PR-B) to 8: the 7 old-gem knobs
+  (`intent_confidence_threshold` 0.5, `max_turn_content_length` 10_000,
+  `max_turns_per_transcript` 1_000, `redaction_marker` "[REDACTED]",
+  `strip_absolute_paths` true, `strip_file_contents` true, `custom_patterns`
+  []) plus `sequence_strategy`. Defaults verbatim. Deleted `version.rb` +
+  `configuration.rb`; `json_exporter` metadata `version:` → `Wild::VERSION`;
+  orphaned `configuration_spec.rb` removed.
+- **MIN-Armstrong — `Wild::Telemetry::Pipeline::Error` subtree added**:
+  `IngestionError`, `NormalizationError`, `PrivacyError`, `ExportError`. Old
+  gem's `ConfigurationError` subsumed by `Wild::ConfigurationError`.
+- Pre-existing complexity (`Transcript` value-object ParameterLists,
+  `tool_extractor` AbcSize) handled with localized inline disables — no
+  refactor (behavior-preserving move).
+- **NOT in this PR** (deferred, `wild-rvv.5` children): F7 (`5.1`), F8 (`5.2`),
+  MIN-Kleppmann (`5.3`), F6 export audit (`5.4`).
 
 ### Wild::Telemetry::Analysis
 

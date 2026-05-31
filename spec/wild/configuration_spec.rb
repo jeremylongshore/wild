@@ -107,6 +107,20 @@ RSpec.describe Wild::Configuration do
       expect(telemetry.pipeline.sequence_strategy).to eq(:ingest_order)
     end
 
+    # Transcript-pipeline knobs carried from the old wild-transcript-pipeline
+    # gem (Role 5 PR-9). Defaults preserved verbatim.
+    # One cohesive defaults check across the 7 carried knobs — splitting into
+    # 7 examples would be vanity granularity (F3).
+    it "Pipeline carries the transcript knobs with their old-gem defaults" do # rubocop:disable RSpec/MultipleExpectations
+      expect(telemetry.pipeline.intent_confidence_threshold).to eq(0.5)
+      expect(telemetry.pipeline.max_turn_content_length).to eq(10_000)
+      expect(telemetry.pipeline.max_turns_per_transcript).to eq(1_000)
+      expect(telemetry.pipeline.redaction_marker).to eq("[REDACTED]")
+      expect(telemetry.pipeline.strip_absolute_paths).to be(true)
+      expect(telemetry.pipeline.strip_file_contents).to be(true)
+      expect(telemetry.pipeline.custom_patterns).to eq([])
+    end
+
     it "Analysis defaults gap_threshold to 0.7" do
       expect(telemetry.analysis.gap_threshold).to eq(0.7)
     end

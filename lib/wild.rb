@@ -10,6 +10,7 @@ require "wild/skillops"
 require "wild/analyzers/permission"
 require "wild/analyzers/test_flakes"
 require "wild/telemetry/collector"
+require "wild/telemetry/pipeline"
 
 # wild — Rails engine + generator: ten Wild::* namespaces consolidated into one
 # mountable gem. Council-blessed Topology A. See 000-docs/adr/ADR-0001-topology.md
