@@ -157,7 +157,36 @@ section splits into a separate file.
 
 ### Wild::Analyzers::Permission
 
-- _(pending: P1 code move from `wild-permission-analyzer` + Fowler `detect_cycle` fix)_
+- Moved 17 source files from `wild-permission-analyzer/lib/wild_permission_analyzer/`
+  into `lib/wild/analyzers/permission/` under the 3-deep `Wild::Analyzers::Permission::*`
+  namespace (Role 5 PR-6). Sub-directories preserved: `models/`, `loaders/`,
+  `analyzers/`, `report/`, `export/`. Module rewritten from compact
+  `module WildPermissionAnalyzer` to nested `module Wild; module Analyzers;
+  module Permission` (Zeitwerk-compatible, same fix as PR #20). New loader at
+  `lib/wild/analyzers/permission.rb` carries the `Wild::Analyzers::Permission.audit`
+  convenience method from the old gem entry point.
+- 22 specs (unit + adversarial + integration) moved to
+  `spec/wild/analyzers/permission/`. Fixtures module rewrapped as
+  `Wild::Analyzers::Permission::TestSupport::Fixtures`, wired into spec_helper.
+- **F1 — `Wild::Configuration::Analyzers::Permission` extended** from 1 setting
+  (`cycle_detection` from PR-B) to 6: the 5 old-gem knobs (`capabilities_path`,
+  `grants_path`, `risk_levels` four-tier severity map, `wildcard_risk_threshold`
+  "medium", `max_prerequisite_depth` 10) plus `cycle_detection`. Defaults
+  preserved verbatim. Deleted the old gem's `version.rb` + `configuration.rb`;
+  the orphaned `configuration_spec.rb` was removed and its coverage folded
+  into the central `spec/wild/configuration_spec.rb`.
+- **MIN-Armstrong — `Wild::Analyzers::Permission::Error` subtree added**:
+  `LoadError`, `AnalysisError`, `ExportError` under
+  `Wild::Analyzers::Permission::Error < Wild::Analyzers::Error`. The old gem's
+  `ConfigurationError` is subsumed by `Wild::ConfigurationError`.
+- Export pair retained to preserve coverage during the move — the F6
+  wire-or-delete audit lives at `wild-rvv.5.4`.
+- Config-setter validation + freeze/frozen? machinery NOT carried over (Wild's
+  no-freeze design); the 2 adversarial tests covering those features were
+  deleted per F3 (no vanity tests of absent behavior). Rationale inline.
+- **NOT in this PR** (deferred per Beck Tidy-First): the Fowler `detect_cycle`
+  false-positive fix and the F3 vanity-test replacement — both are Role 6/7
+  behavior changes under `wild-rvv.7`'s children (`wild-rvv.7.1`).
 
 ### Wild::Analyzers::TestFlakes
 

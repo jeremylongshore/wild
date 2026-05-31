@@ -114,7 +114,22 @@ module Wild
   end
 
   module Analyzers
+    # Base for every Wild::Analyzers failure mode.
     class Error < Wild::Error; end
+
+    # Permission analyzer sub-namespace errors (from wild-permission-analyzer).
+    module Permission
+      class Error < Wild::Analyzers::Error; end
+
+      # Raised when a capabilities/grants file cannot be loaded or parsed.
+      class LoadError < Error; end
+
+      # Raised when an analysis pass fails on otherwise-valid input.
+      class AnalysisError < Error; end
+
+      # Raised when report export fails.
+      class ExportError < Error; end
+    end
   end
 
   module Skillops

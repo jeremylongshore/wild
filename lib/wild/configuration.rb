@@ -157,9 +157,33 @@ module Wild
 
     # Analyzers has two sub-namespaces; group them under a parent.
     class Analyzers
-      Permission = Struct.new(:cycle_detection, keyword_init: true) do
+      PERMISSION_DEFAULT_RISK_LEVELS = {
+        "low" => 1, "medium" => 2, "high" => 3, "critical" => 4
+      }.freeze
+
+      # Permission carries the audit-policy knobs the old wild-permission-analyzer
+      # gem exposed plus the `cycle_detection` flag from PR-B (consumed by the
+      # Fowler detect_cycle fix — wild-rvv.7 follow-up). Defaults preserved verbatim
+      # from the old gem; the gem's per-setter validation + freeze! machinery is
+      # NOT carried over (Wild's no-freeze configuration design).
+      Permission = Struct.new(
+        :cycle_detection,
+        :capabilities_path,
+        :grants_path,
+        :risk_levels,
+        :wildcard_risk_threshold,
+        :max_prerequisite_depth,
+        keyword_init: true
+      ) do
         def initialize(**kwargs)
-          super(cycle_detection: kwargs.fetch(:cycle_detection, :strict))
+          super(
+            cycle_detection: kwargs.fetch(:cycle_detection, :strict),
+            capabilities_path: kwargs.fetch(:capabilities_path, nil),
+            grants_path: kwargs.fetch(:grants_path, nil),
+            risk_levels: kwargs.fetch(:risk_levels, PERMISSION_DEFAULT_RISK_LEVELS.dup),
+            wildcard_risk_threshold: kwargs.fetch(:wildcard_risk_threshold, "medium"),
+            max_prerequisite_depth: kwargs.fetch(:max_prerequisite_depth, 10)
+          )
         end
       end
 
