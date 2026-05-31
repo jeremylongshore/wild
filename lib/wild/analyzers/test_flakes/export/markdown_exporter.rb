@@ -95,8 +95,14 @@ module Wild
             lines.join("\n")
           end
 
+          # Escapes backslash AND pipe (block form avoids gsub replacement-string
+          # backslash interpretation), then neutralizes backticks. Closes a
+          # CodeQL rb/incomplete-sanitization finding carried in from the
+          # wild-test-flake-forensics source — same fix as PR #25's permission
+          # markdown exporter. Behavior-preserving for all existing inputs;
+          # documented as a scope extension to the Role 5 PR-7 move.
           def escape_md(text)
-            text.to_s.gsub("|", '\\|').gsub("`", "'")
+            text.to_s.gsub(/[\\|]/) { |c| "\\#{c}" }.gsub("`", "'")
           end
         end
       end
