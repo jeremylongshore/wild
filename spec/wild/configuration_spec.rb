@@ -173,6 +173,26 @@ RSpec.describe Wild::Configuration do
     it "TestFlakes defaults classifier_corpus_path to nil (engineer-supplied)" do
       expect(analyzers.test_flakes.classifier_corpus_path).to be_nil
     end
+
+    # Flake-detection knobs carried from the old wild-test-flake-forensics gem
+    # (Role 5 PR-7). Defaults preserved verbatim.
+    it "TestFlakes defaults minimum_runs to 3" do
+      expect(analyzers.test_flakes.minimum_runs).to eq(3)
+    end
+
+    it "TestFlakes defaults flake_rate_threshold to 0.1" do
+      expect(analyzers.test_flakes.flake_rate_threshold).to eq(0.1)
+    end
+
+    it "TestFlakes defaults max_history_entries to 10_000" do
+      expect(analyzers.test_flakes.max_history_entries).to eq(10_000)
+    end
+
+    it "TestFlakes defaults severity_weights to all-1.0 four-signal map" do
+      expect(analyzers.test_flakes.severity_weights).to eq(
+        flake_rate: 1.0, failure_count: 1.0, trend: 1.0, confidence: 1.0
+      )
+    end
   end
 
   describe Wild::Configuration::Skillops do

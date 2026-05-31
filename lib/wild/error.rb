@@ -130,6 +130,20 @@ module Wild
       # Raised when report export fails.
       class ExportError < Error; end
     end
+
+    # TestFlakes sub-namespace errors (from wild-test-flake-forensics).
+    module TestFlakes
+      class Error < Wild::Analyzers::Error; end
+
+      # Raised when a test-result report (rspec/junit/minitest) cannot be parsed.
+      class ParseError < Error; end
+
+      # Raised when flake detection fails on otherwise-valid input.
+      class DetectionError < Error; end
+
+      # Raised when report export fails.
+      class ExportError < Error; end
+    end
   end
 
   module Skillops

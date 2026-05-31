@@ -187,9 +187,36 @@ module Wild
         end
       end
 
+      TEST_FLAKES_DEFAULT_SEVERITY_WEIGHTS = {
+        flake_rate: 1.0, failure_count: 1.0, trend: 1.0, confidence: 1.0
+      }.freeze
+
+      # TestFlakes carries the flake-detection knobs the old
+      # wild-test-flake-forensics gem exposed plus the `classifier_corpus_path`
+      # placeholder from PR-B (consumed by the F3 golden-corpus work). Defaults
+      # preserved verbatim; the gem's per-setter validation + freeze! machinery
+      # is NOT carried over (Wild's no-freeze configuration design).
+      #
       # `classifier_corpus_path: nil` means "engineer must supply"; runtime
       # raises Wild::Analyzers::Error if the classifier is invoked without a path.
-      TestFlakes = Struct.new(:classifier_corpus_path, keyword_init: true)
+      TestFlakes = Struct.new(
+        :classifier_corpus_path,
+        :minimum_runs,
+        :flake_rate_threshold,
+        :max_history_entries,
+        :severity_weights,
+        keyword_init: true
+      ) do
+        def initialize(**kwargs)
+          super(
+            classifier_corpus_path: kwargs.fetch(:classifier_corpus_path, nil),
+            minimum_runs: kwargs.fetch(:minimum_runs, 3),
+            flake_rate_threshold: kwargs.fetch(:flake_rate_threshold, 0.1),
+            max_history_entries: kwargs.fetch(:max_history_entries, 10_000),
+            severity_weights: kwargs.fetch(:severity_weights, TEST_FLAKES_DEFAULT_SEVERITY_WEIGHTS.dup)
+          )
+        end
+      end
 
       attr_reader :permission, :test_flakes
 
