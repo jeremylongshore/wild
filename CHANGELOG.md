@@ -386,14 +386,25 @@ section splits into a separate file.
   explicit frame stack — no recursion-depth ceiling): a back-edge to a GRAY
   (on-stack) node is the only cycle signal, and each ring is reported exactly
   once via a rotation-invariant signature. The depth limit is gone (it was the
-  bug, not a safety feature); `max_prerequisite_depth` remains a reserved
-  config knob, no longer wired to cycle detection.
+  bug, not a safety feature).
+- **`max_prerequisite_depth` config knob removed** (`wild-0e0`, Fowler+Hickey
+  decide-or-cut follow-up on the detect_cycle fix). Tri-color DFS left the knob
+  wired to nothing. Per the reviewers' own framing — "dead config erodes trust
+  in live config; the next operator sets it expecting an effect, gets none,
+  distrusts the whole config surface" — it was **cut**, not left inert. Dropped
+  the `Wild::Configuration::Analyzers::Permission` struct member + its default,
+  the "defaults to 10" + "accepts 1" spec assertions, and the
+  "even with the knob set low" cycle-guard variant. A future "warn beyond
+  operational depth" finding, if ever wanted, is a clean additive feature (new
+  knob + `:warning` finding) under its own bead — not a speculatively-reserved
+  hook. CTO call: option (a) delete over option (b) build-the-feature, per the
+  "no speculative infrastructure" build principle.
 - **Test discipline** (Beck + Fowler gate): the former
   "max_prerequisite_depth prevents infinite loops" example — which built a
   15-deep acyclic chain, set the limit to 5, and asserted only `not_to
   raise_error`, thereby documenting the false positive as a feature — was
   **deleted**. Replaced with: a 15-deep-straight-line guard (zero
-  `:circular_prerequisite` findings, even with the knob set low), 2-node +
+  `:circular_prerequisite` findings), 2-node +
   3-node cycle "reported exactly once" specs, a diamond (shared-but-acyclic)
   guard, and a `full_audit_spec` integration test proving a deep acyclic chain
   yields zero critical findings. All written failing-first against the buggy

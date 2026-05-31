@@ -76,19 +76,15 @@ RSpec.describe "Edge cases and adversarial inputs" do
     end
   end
 
-  describe "Configuration boundary conditions" do
-    it "accepts max_prerequisite_depth of 1" do
-      Wild.configure { |c| c.analyzers.permission.max_prerequisite_depth = 1 }
-      expect(Wild.config.analyzers.permission.max_prerequisite_depth).to eq(1)
-    end
-
-    # The old gem's Configuration did per-setter validation
-    # (wildcard_risk_threshold must be a known risk level) and froze itself
-    # after `configure`. Wild's typed Struct + no-freeze design dropped both.
-    # The 2 specs covering those behaviors are deleted rather than rewritten —
-    # F3 (no vanity tests of absent behavior). If validation returns as a
-    # Role 6 follow-up, the specs come back with it.
-  end
+  # No "Configuration boundary conditions" example group: the only test it held,
+  # "accepts max_prerequisite_depth of 1", was removed with the knob itself
+  # (wild-0e0) — it set a dead config field and asserted the setter ran, a
+  # textbook F3 vanity test of absent behavior. The old gem's Configuration also
+  # did per-setter validation (wildcard_risk_threshold must be a known risk
+  # level) and froze itself after `configure`; Wild's typed Struct + no-freeze
+  # design dropped both, and the 2 specs covering them were deleted rather than
+  # rewritten (F3 — no vanity tests of absent behavior). If validation returns
+  # as a Role 6 follow-up, the specs come back with it.
 
   describe "Circular prerequisite with three-node chain" do
     it "detects three-way circular prerequisites" do
