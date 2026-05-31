@@ -165,6 +165,39 @@ section splits into a separate file.
 
 ### Wild::Skillops
 
-- _(pending: P1 code move from `wild-skillops-registry` as internal namespace — Lamport-flagged claims downgraded)_
+- Moved 20 source files from `wild-skillops-registry/lib/wild_skillops_registry/`
+  into `lib/wild/skillops/` under the `Wild::Skillops::*` namespace (Role 5
+  PR-5). Layout preserved verbatim: `models/`, `registry/`, `versioning/`,
+  `governance/`, `discovery/`, `health/`, `export/` sub-directories.
+  Module renamed from `WildSkillopsRegistry` to `Wild::Skillops` via
+  Zeitwerk-nested rewrite (same pattern as PR #20 for Wild::Hooks). New
+  loader at `lib/wild/skillops.rb` carries the `Wild::Skillops.build`
+  factory + `RegistryFacade` class from the old gem entry point.
+- 24 specs (unit + 2 adversarial + 2 integration) moved to
+  `spec/wild/skillops/`. Fixtures module (`RegistryFixtures`) rewrapped as
+  `Wild::Skillops::TestSupport::Fixtures` and wired into spec_helper.
+- **F5 partial — `Wild::Configuration::Skillops` extended** from 1 setting
+  (`:enabled`) to 6 (the 5 old-gem knobs: `max_skills` 1000, `max_versions_per_skill`
+  50, `health_stale_threshold_hours` 24, `allowed_lifecycle_states`
+  [:draft, :active, :deprecated, :retired], `allowed_health_states`
+  [:available, :degraded, :unavailable, :unknown]). Defaults preserved
+  verbatim. The F5 README/doc downgrade (removing the "atomic" / "durable"
+  claims Lamport flagged) remains a separate Role 6 bead — `wild-rvv.8.1`.
+- **F1 + MIN-Armstrong applied** — deleted the old gem's `version.rb` (one
+  `Wild::VERSION` at gem level); collapsed the 7-class error tree into 6
+  subclasses under `Wild::Skillops::Error` (`ValidationError`,
+  `NotFoundError`, `DuplicateSkillError`, `LifecycleError`,
+  `RegistryCapacityError`, `VersionCapacityError`). The old gem's
+  `ConfigurationFrozenError` is subsumed by `Wild::ConfigurationError`
+  (Wild engine no longer freezes config — by design). The Configuration
+  setter validation + freeze/frozen? machinery is NOT carried over;
+  the 6 adversarial tests covering those features were deleted per
+  Beck/F3 (no vanity tests of absent behavior).
+- Export pair (`json_exporter` + `markdown_exporter`) retained in this PR
+  to preserve test coverage during the structure move — the F6 wire-or-
+  delete audit lives at `wild-rvv.8.3` and stays open.
+- Closes `wild-rvv.8` base move. Children `wild-rvv.8.1` (F5 doc downgrade),
+  `wild-rvv.8.2` (F10 BDUF cutback), `wild-rvv.8.3` (F6 exporter audit)
+  remain open as Role 6 + Role 7 behavior follow-ups.
 
 [Unreleased]: https://github.com/jeremylongshore/wild/compare/v0.0.0...HEAD
