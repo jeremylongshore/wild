@@ -42,6 +42,18 @@ if ENV["COVERAGE"]
 end
 
 require "wild"
+
+# Wild::Introspection specs run against a live in-memory ActiveRecord schema
+# (the gem inspects real Rails models). ActiveRecord is already loaded via
+# Wild::Engine's `require "rails"`; we establish a throwaway sqlite connection
+# and load the test schema + models once. This is global but harmless to the
+# non-AR namespaces (they never touch the connection or the test models).
+require "active_record"
+ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")
+ActiveRecord::Schema.verbose = false
+require_relative "support/wild_introspection/test_schema"
+require_relative "support/wild_introspection/test_models"
+
 require_relative "support/wild_hooks/hook_fixtures"
 require_relative "support/wild_skillops/fixtures"
 require_relative "support/wild_analyzers_permission/fixtures"
@@ -49,6 +61,7 @@ require_relative "support/wild_analyzers_test_flakes/fixtures"
 require_relative "support/wild_telemetry_collector/event_fixtures"
 require_relative "support/wild_telemetry_pipeline/fixtures"
 require_relative "support/wild_telemetry_analysis/telemetry_fixtures"
+require_relative "support/wild_introspection/test_config_helper"
 
 RSpec.configure do |config|
   # Fixture modules are scoped to their own namespace's spec subtree by
@@ -70,6 +83,17 @@ RSpec.configure do |config|
                  file_path: %r{spec/wild/telemetry/pipeline/}
   config.include Wild::Telemetry::Analysis::TestSupport::TelemetryFixtures,
                  file_path: %r{spec/wild/telemetry/analysis/}
+  config.include Wild::Introspection::TestSupport::TestConfigHelper,
+                 file_path: %r{spec/wild/introspection/}
+
+  # Introspection keeps a memoized policy-loader (Wild::Introspection.configuration)
+  # + an adapter connection pool; reset both between its examples so policy and
+  # connection state never leak. Scoped to introspection specs only.
+  config.before(file_path: %r{spec/wild/introspection/}) do
+    Wild::Introspection.reset!
+    Wild::Introspection::Adapter::ConnectionManager.reset!
+  end
+
   config.expect_with :rspec do |expectations|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true
   end

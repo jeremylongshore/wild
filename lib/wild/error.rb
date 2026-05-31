@@ -70,6 +70,16 @@ module Wild
     # Requested model is not in `Wild.config.introspection.allowed_models`
     # (or the derived set when `allowed_models` is nil).
     class ModelNotAllowedError < Error; end
+
+    # Access-policy / blocked-resources YAML is malformed or missing
+    # (from wild-rails-safe-introspection-mcp).
+    class ConfigError < Error; end
+
+    # A tool attempted a write path against the read-only adapter.
+    class WriteAttemptError < Error; end
+
+    # A bounded query exceeded its configured timeout.
+    class QueryTimeoutError < Error; end
   end
 
   module AdminTools
