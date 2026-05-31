@@ -83,7 +83,51 @@ module Wild
   end
 
   module AdminTools
+    # Base for every Wild::AdminTools failure mode.
     class Error < Wild::Error; end
+
+    # Raised when a requested admin action is not in the allowlist.
+    class ActionNotFoundError < Error
+      attr_reader :action_name
+
+      def initialize(action_name)
+        @action_name = action_name
+        super("Unknown action: #{action_name}")
+      end
+    end
+
+    # Raised when action parameters fail validation. Carries the error list.
+    class ValidationError < Error
+      attr_reader :errors
+
+      def initialize(errors)
+        @errors = Array(errors)
+        super("Validation failed: #{@errors.join(", ")}")
+      end
+    end
+
+    # Raised when a job/cache/flag adapter operation fails. Wraps the cause.
+    class AdapterError < Error
+      attr_reader :original_error
+
+      def initialize(message, original_error: nil)
+        @original_error = original_error
+        super(message)
+      end
+    end
+
+    # Raised when caller identity cannot be established.
+    class AuthenticationError < Error; end
+
+    # Raised when the capability gate denies or errors. Wraps the cause.
+    class GateError < Error
+      attr_reader :original_error
+
+      def initialize(message, original_error: nil)
+        @original_error = original_error
+        super(message)
+      end
+    end
   end
 
   module Telemetry

@@ -62,6 +62,11 @@ require_relative "support/wild_telemetry_collector/event_fixtures"
 require_relative "support/wild_telemetry_pipeline/fixtures"
 require_relative "support/wild_telemetry_analysis/telemetry_fixtures"
 require_relative "support/wild_introspection/test_config_helper"
+require_relative "support/wild_admin_tools/test_adapters"
+require_relative "support/wild_admin_tools/shared_examples/executor_shared_examples"
+require_relative "support/wild_admin_tools/policy_fixtures"
+require_relative "support/wild_admin_tools/test_gate"
+require_relative "support/wild_admin_tools/safety_helpers"
 
 RSpec.configure do |config|
   # Fixture modules are scoped to their own namespace's spec subtree by
@@ -85,6 +90,10 @@ RSpec.configure do |config|
                  file_path: %r{spec/wild/telemetry/analysis/}
   config.include Wild::Introspection::TestSupport::TestConfigHelper,
                  file_path: %r{spec/wild/introspection/}
+  config.include Wild::AdminTools::TestSupport::PolicyFixtures,
+                 file_path: %r{spec/wild/admin_tools/}
+  config.include Wild::AdminTools::TestSupport::SafetyHelpers,
+                 file_path: %r{spec/wild/admin_tools/}
 
   # Introspection keeps a memoized policy-loader (Wild::Introspection.configuration)
   # + an adapter connection pool; reset both between its examples so policy and
@@ -92,6 +101,12 @@ RSpec.configure do |config|
   config.before(file_path: %r{spec/wild/introspection/}) do
     Wild::Introspection.reset!
     Wild::Introspection::Adapter::ConnectionManager.reset!
+  end
+
+  # AdminTools keeps a memoized injection-config (Wild::AdminTools.configuration);
+  # reset between its examples so injected adapters/gate never leak.
+  config.before(file_path: %r{spec/wild/admin_tools/}) do
+    Wild::AdminTools.reset_configuration!
   end
 
   config.expect_with :rspec do |expectations|

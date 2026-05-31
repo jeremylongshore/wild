@@ -77,7 +77,41 @@ section splits into a separate file.
 
 ### Wild::AdminTools
 
-- _(pending: P1 code move from `wild-admin-tools-mcp` + DI-container removal)_
+- Moved 39 source files from `wild-admin-tools-mcp/lib/wild_admin_tools_mcp/`
+  into `lib/wild/admin_tools/` under the `Wild::AdminTools::*` namespace
+  (Role 5 PR-12 — **the final namespace move; completes the 10-namespace
+  consolidation**). Sub-directories preserved: `executor/` (+ `adapters/`),
+  `guard/`, `confirmation/`, `audit/`, `identity/`, `server/` (+ `tools/`).
+  Module Zeitwerk-rewritten from compact form. New loader at
+  `lib/wild/admin_tools.rb` carries the `.configure` / `.configuration` /
+  `.reset_configuration!` accessors.
+- 39 specs (unit + safety + adversarial + integration) + 5 support files
+  moved to `spec/wild/admin_tools/` and `spec/support/wild_admin_tools/`.
+  `PolicyFixtures` + `SafetyHelpers` included `file_path`-scoped; a scoped
+  `Wild::AdminTools.reset_configuration!` before-hook; `shared_examples`
+  required globally. Three specs' stale `require_relative '../../support/test_gate'`
+  lines removed (spec_helper loads support globally now).
+- **MIN-Armstrong — `Wild::AdminTools::Error` subtree** built with the gem's
+  custom-initializer errors: `ActionNotFoundError` (carries `action_name`),
+  `ValidationError` (carries `errors`), `AdapterError` + `GateError` (carry
+  `original_error`), `AuthenticationError`. The gem's bare `Error < StandardError`
+  becomes `Wild::AdminTools::Error < Wild::Error` (rescue behavior preserved);
+  its `ConfigurationError` subsumed by `Wild::ConfigurationError`. `version.rb`
+  deleted (F1); `audit/record` + `server_factory` version metadata →
+  `Wild::VERSION`.
+- **Configuration kept as a namespace object** (`wild-rvv.uku`). The gem's
+  `Configuration` holds dependency-injection points (`cache_adapter`,
+  `job_adapter`, `flag_adapter`, `gate`, `policy_path`, `audit_log_path`,
+  `audit_store` — all nil-default). It moves as `Wild::AdminTools::Configuration`
+  with the `.configuration` accessor preserved. Reconciling these nil-default
+  injection points with PR-B's central `Wild::Configuration::AdminTools`
+  `:default` sentinels — **the "kill the DI container" adapter-defaulting at
+  engine boot** — is deferred to Role 8 (overlaps `wild-rvv.3.1`). Mirrors the
+  introspection `wild-rvv.u16` decision; F1 still holds.
+- **NOT in this PR** (anti-scope): refactoring `server/` to consume
+  `Wild::Hooks::McpServer` + wiring `bin/wild-mcp-admin` is Role 9 (MCP
+  transport); the DI-container adapter-defaulting is Role 8. The `server/`
+  code + the `gate`-injection wiring move verbatim.
 
 ### Wild::CapabilityGate
 
