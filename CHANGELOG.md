@@ -115,6 +115,34 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
+- **F2 audit-emission fix (council rev2, Armstrong)** — closes the two
+  audit-blind paths the council named (Role 6 PR-1, `wild-rvv.4.1`):
+  - **Evaluation that raises now leaves an audit trail.** `Evaluator#evaluate`
+    wraps its decision logic in a rescue: on any `StandardError` it fails
+    closed (denies with reason `:evaluation_error`) AND emits the matching
+    audit event before returning. Previously a raise propagated to
+    `Gate#evaluate`'s rescue, which denied but emitted nothing — a silent
+    denial. The prerequisite checkers are already fail-closed, so this is
+    defense-in-depth against a corrupted registry/grant or a future checker bug.
+  - **Audit-pipeline failure is no longer doubly silent.** `Evaluator#emit_audit`
+    previously swallowed write failures to `nil`. It now logs them to
+    `Wild.config.audit_logger.error` (still never raises — a broken audit log
+    must not break the gate). Only a simultaneous writer-AND-logger outage is
+    terminally silent.
+  - `Audit::Event` gains a third result value, `evaluation_error` (distinct
+    from `denied`), so audit readers can tell "policy said no" apart from "the
+    gate broke and failed closed". `:evaluation_error` is always a denial
+    (hard-fail intrinsic to `EvaluationResult.denied`).
+  - New `spec/wild/capability_gate/audit/audit_liveness_spec.rb` (8 examples)
+    proves the property under deliberate corruption: an exploding registry →
+    asserts denial + reason `:evaluation_error` + exactly one emitted event
+    with `result: "evaluation_error"`; an exploding writer → asserts no raise,
+    allow-result preserved, and the failure logged to the audit logger.
+  - **NOT in this PR** (separate `wild-rvv.4.1` children): the full
+    `audit_event.yml` schema migration — `decision_id` / `policy_version` /
+    `audit_emit_ms` (`wild-rvv.4.1.3`), and the json-schema validator wiring
+    (`wild-rvv.4.1.2`). This PR uses the existing event shape + the new
+    `evaluation_error` result value.
 - Moved 18 source files from `wild-capability-gate/lib/wild/capability_gate/`
   into `lib/wild/capability_gate/` under the existing `Wild::CapabilityGate`
   namespace. The source gem already used proper lexical module nesting and
