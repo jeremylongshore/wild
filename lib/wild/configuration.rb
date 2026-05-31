@@ -175,11 +175,34 @@ module Wild
       end
     end
 
-    Skillops = Struct.new(:enabled, keyword_init: true) do
+    # Skillops carries the registry-policy knobs the old wild-skillops-registry
+    # gem exposed (max_skills, max_versions_per_skill, etc.) plus the F5-mandated
+    # `enabled` flag. Defaults preserved verbatim from the old gem; the gem's
+    # per-setter type validation + freeze!/frozen? machinery is NOT carried
+    # over (consistent with Wild's no-freeze configuration design).
+    SKILLOPS_DEFAULT_LIFECYCLE_STATES = %i[draft active deprecated retired].freeze
+    SKILLOPS_DEFAULT_HEALTH_STATES    = %i[available degraded unavailable unknown].freeze
+
+    Skillops = Struct.new(
+      :enabled,
+      :max_skills,
+      :max_versions_per_skill,
+      :health_stale_threshold_hours,
+      :allowed_lifecycle_states,
+      :allowed_health_states,
+      keyword_init: true
+    ) do
       def initialize(**kwargs)
-        # F5 — Wild::Skillops is an internal namespace by default.
-        # Enable only when a real consumer appears (ADR-0002 path).
-        super(enabled: kwargs.fetch(:enabled, false))
+        super(
+          # F5 — Wild::Skillops is an internal namespace by default.
+          # Enable only when a real consumer appears (ADR-0002 path).
+          enabled: kwargs.fetch(:enabled, false),
+          max_skills: kwargs.fetch(:max_skills, 1_000),
+          max_versions_per_skill: kwargs.fetch(:max_versions_per_skill, 50),
+          health_stale_threshold_hours: kwargs.fetch(:health_stale_threshold_hours, 24),
+          allowed_lifecycle_states: kwargs.fetch(:allowed_lifecycle_states, SKILLOPS_DEFAULT_LIFECYCLE_STATES.dup),
+          allowed_health_states: kwargs.fetch(:allowed_health_states, SKILLOPS_DEFAULT_HEALTH_STATES.dup)
+        )
       end
     end
 

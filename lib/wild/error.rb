@@ -118,6 +118,27 @@ module Wild
   end
 
   module Skillops
+    # Base for every Wild::Skillops failure mode.
     class Error < Wild::Error; end
+
+    # Raised when a skill registration payload fails validation.
+    class ValidationError < Error; end
+
+    # Raised when a referenced skill does not exist in the registry.
+    class NotFoundError < Error; end
+
+    # Raised when a duplicate skill name is registered without explicit update.
+    class DuplicateSkillError < Error; end
+
+    # Raised when a lifecycle transition is not permitted.
+    class LifecycleError < Error; end
+
+    # Raised when the registry exceeds its configured capacity
+    # (Wild.config.skillops.max_skills).
+    class RegistryCapacityError < Error; end
+
+    # Raised when a skill version limit is exceeded
+    # (Wild.config.skillops.max_versions_per_skill).
+    class VersionCapacityError < Error; end
   end
 end
