@@ -132,6 +132,52 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
       expect(logger).to have_received(:error).with(/audit emission failed: IOError/)
     end
   end
+
+  describe "when BOTH the audit writer AND the logger are broken (terminal silent path)" do
+    # The one genuinely-terminal silent path, by design. It requires two
+    # simultaneous failures — writer raises on write, logger raises on error.
+    # The contract: the gate STILL does not raise and STILL returns its
+    # computed result. This pins Armstrong's F2 terminal-silence boundary so a
+    # refactor can't silently widen it.
+    let(:exploding_writer) do
+      Class.new do
+        def write(_event) = raise(IOError, "audit disk full")
+      end.new
+    end
+
+    let(:exploding_logger) do
+      Class.new do
+        def error(_msg) = raise(StandardError, "logger backend down")
+      end.new
+    end
+
+    let(:evaluator) do
+      Wild::CapabilityGate::Evaluator.from_files(
+        capabilities_path: capabilities_path,
+        grants_path: grants_path,
+        audit_writer: exploding_writer
+      )
+    end
+
+    before { Wild.configure { |c| c.audit_logger = exploding_logger } }
+
+    it "does not raise even when the logger itself is broken" do
+      expect do
+        evaluator.evaluate(
+          caller_id: "service-account:introspection-agent",
+          capability_name: :basic_introspection
+        )
+      end.not_to raise_error
+    end
+
+    it "still returns the computed result when writer+logger both fail" do
+      result = evaluator.evaluate(
+        caller_id: "service-account:introspection-agent",
+        capability_name: :basic_introspection
+      )
+      expect(result).to be_allowed
+    end
+  end
 end
 
 # rubocop:enable RSpec/DescribeClass, RSpec/MultipleMemoizedHelpers

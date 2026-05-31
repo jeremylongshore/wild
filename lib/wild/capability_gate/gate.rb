@@ -60,6 +60,15 @@ module Wild
         )
       end
 
+      # Last-resort safety net. Reaching here means Evaluator#evaluate broke
+      # its never-raises contract — that is a BUG, not a policy outcome, and
+      # this path is audit-blind BY CONSTRUCTION (the Gate holds no audit
+      # writer; emission lives in the Evaluator where the writer is). The
+      # Evaluator's own rescue emits the evaluation_error event for every
+      # real failure; if execution reaches here the Evaluator's contract has
+      # been violated and the missing audit event is the signal. Pinned by a
+      # Gate-rescue contract test (wild-rvv.4.1 fast-follow per Armstrong F2
+      # sign-off). Still fails closed.
       def deny_with_error(caller_value, capability, error)
         EvaluationResult.denied(
           capability_name: capability || :unknown,
