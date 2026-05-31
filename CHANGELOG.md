@@ -343,6 +343,37 @@ section splits into a separate file.
 
 ### Wild::Analyzers::Permission
 
+- **F4 anti-drift fence landed + corpus reconciled to the real grammar**
+  (Role 6 PR-3; `wild-rvv.1.2.1` + `wild-lkp`). The shared
+  `lib/wild/schemas/wildcard_corpus.yml` (Role 4 PR-D) described a `::`-segmented
+  grammar with 8 forms + segment-boundary semantics that **neither shipped
+  matcher implemented**, in a notation that doesn't match the real dotted/flat
+  capability names. Per the "code is truth" reconciliation:
+  - **Corpus rewritten (v1 → v2)** to the dotted-glob grammar
+    `Wild::Analyzers::Permission::Analyzers::WildcardMatcher` actually implements
+    (exact; trailing `admin.jobs.*`; prefix `admin.*`; middle `admin.*.retry`;
+    universal `*`). Truth tables verified against the live matcher's real
+    (greedy `*`→`.*`, no segment-boundary) behaviour — `admin.jobs.*` matches the
+    deeper `admin.jobs.retry.force`; universal `*` matches every string incl `""`.
+  - **New corpus-driven smoke spec** (`wildcard_corpus_matcher_spec.rb`) runs the
+    matcher against every entry's `matches[]`/`non_matches[]` — the actual
+    anti-drift fence; red if the matcher drifts from the documented grammar.
+  - **Escaping-contract rows pinned** (Hickey F4 gate, Finding 1): the corpus now
+    pins the grammar's *defining* constraint, not just its happy path — `*` is the
+    SOLE metacharacter (every other char is a literal, because `Regexp.escape`
+    runs before the `*`→`.*` substitution), and `*` is zero-or-more. Rows for
+    `.*` (leading-dot-literal, NOT universal), `a.b`/`a+b` (literal dot/plus),
+    `a*c` + `admin.jobs.` (zero-width `*`). Fence verified by mutation: dropping
+    `Regexp.escape` → 2 red; `.*`→`.+` → 3 red. Reviewer follow-ups filed as
+    `wild-96t` (schema-spec non_matches invariant) + `wild-yms` (centralize
+    wildcard *detection*). Schema-as-data seam signed off by `rich-hickey-reviewer`.
+  - **Scope decision**: capability-name wildcard matching lives in exactly ONE
+    namespace (Permission). `Wild::CapabilityGate` is exact-symbol-match BY
+    DESIGN — its only wildcard is the *caller* `*` (a different axis). The
+    council F4 "the two must not disagree" is satisfied vacuously — there is one
+    capability-name matcher. Documented in `grant.rb` + pinned by new
+    `grant_spec` cases. The richer `::` grammar, if ever wanted, is a deliberate
+    matcher change with its own ADR — not a silent expectation.
 - **`detect_cycle` false-positive fixed** (Fowler review findings 1 + 10 —
   his most-costly-to-recover-from finding; Role 6 PR-2, `wild-jzg` under
   `wild-rvv.7`). `PrerequisiteAnalyzer#detect_cycle` used a

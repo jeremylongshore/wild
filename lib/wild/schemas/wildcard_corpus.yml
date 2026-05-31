@@ -1,105 +1,182 @@
-# Wildcard matching corpus — shared by Wild::Analyzers::Permission and
-# Wild::CapabilityGate.
+# Wildcard matching corpus — the shared truth table for capability-name
+# wildcard matching in Wild::Analyzers::Permission.
 #
-# Per ADR-0003 + 003-AT-ARCH § "Cross-namespace contract drift defense (F4)":
-# these two namespaces both make wildcard matching decisions on capability
-# names and model paths. They MUST never disagree on what counts as a
-# wildcard. This corpus is the single shared truth table: both code paths
-# load this file at boot and run their matchers against it as a smoke test.
+# Per ADR-0003 + 003-AT-ARCH § "Cross-namespace contract drift defense (F4)".
 #
-# Each entry has the shape:
-#   - pattern: the literal pattern string a policy author would write
-#     description: one-line explanation
-#     matches: list of strings the pattern should match
-#     non_matches: list of strings the pattern should NOT match
+# SCOPE (reconciled 2026-05-31, wild-lkp — "code is truth"):
+#   Capability-name wildcard matching is performed by exactly ONE namespace:
+#   Wild::Analyzers::Permission (Analyzers::WildcardMatcher). This corpus
+#   documents that matcher's real grammar and is the anti-drift fence against
+#   it (see spec/wild/schemas/wildcard_corpus_spec.rb +
+#   spec/wild/analyzers/permission/analyzers/wildcard_corpus_matcher_spec.rb).
+#
+#   Wild::CapabilityGate does NOT wildcard-match capability NAMES — by design.
+#   `Grant#grants_capability?` is exact-symbol-match; a grant lists the explicit
+#   capabilities it confers. The only wildcard CapabilityGate honours is the
+#   CALLER wildcard "*" (a grant to all authenticated callers, `Grant#wildcard?`),
+#   which is a different axis entirely and is not capability-pattern matching.
+#   So there is no second capability-name matcher to drift against — the council
+#   F4 concern ("the two must not DISAGREE on what counts as a wildcard") is
+#   satisfied vacuously: only one namespace pattern-matches capability names, and
+#   this corpus fences it. CapabilityGate exact-match is covered by its own specs.
+#
+#   The earlier draft of this file described a richer ::-segmented grammar
+#   (User::*, *::Admin, User::**, !negation, mid-segment) with segment-boundary
+#   semantics. NEITHER shipped matcher implemented that grammar, and real
+#   capability names are dotted/flat (admin.jobs.view, basic_introspection), not
+#   ::-segmented. Rewritten here to the dotted glob the code actually implements.
+#   If a richer grammar is wanted later, that is a deliberate matcher change with
+#   its own ADR + corpus update — not a silent expectation.
+#
+# Grammar (Wild::Analyzers::Permission::Analyzers::WildcardMatcher):
+#   The matcher is `Regexp.escape(pattern).gsub('\*', '.*')` anchored \A..\z.
+#   Two consequences DEFINE the grammar and are the things a careless refactor
+#   breaks silently — they are pinned by truth-table rows below (Hickey F4 gate):
+#     1. "*" is the SOLE metacharacter. Every other regex-special char in a
+#        pattern ("." "+" "(" "[" ...) is a LITERAL, because Regexp.escape runs
+#        BEFORE the "*" → ".*" substitution. So "." matches only a literal dot,
+#        "a+b" matches only the string "a+b", and the pattern ".*" requires a
+#        LEADING LITERAL DOT — it is NOT "match everything" (that is bare "*").
+#     2. "*" → ".*" is GREEDY + ZERO-OR-MORE: it crosses "." separators AND
+#        matches the empty string. So "admin.jobs.*" matches "admin.jobs.retry",
+#        the deeper "admin.jobs.retry.force", AND "admin.jobs." (trailing dot,
+#        "*" matched nothing). There is no direct-child-only / segment-boundary /
+#        at-least-one-char semantics.
+#   Truth tables below reflect that real behaviour. If a refactor changes the
+#   escape ORDER (literal-dot rows go red) or makes "*" segment-bounded /
+#   one-or-more (greedy + zero-width rows go red), this corpus is the fence.
+#
+# Each entry:
+#   - pattern:     the literal pattern a policy author writes
+#     description: one-line explanation of the real behaviour
+#     matches:     strings the matcher returns true for
+#     non_matches: strings the matcher returns false for (may be empty for the
+#                  universal "*", which matches every string including "")
 #
 # Adding a wildcard form requires:
-#   1. New entry here (matches + non_matches both non-empty)
-#   2. Spec assertion in spec/wild/schemas/wildcard_corpus_spec.rb
-#      that load + match both work
-#   3. Implementation change in BOTH lib/wild/analyzers/permission/
-#      AND lib/wild/capability_gate/ (Packwerk enforces neither can
-#      reach into the other — they each load this YAML independently)
-#   4. CHANGELOG entry under Wild::Analyzers::Permission AND
-#      Wild::CapabilityGate sections
+#   1. New entry here (matches non-empty; non_matches non-empty unless the form
+#      genuinely has none, like universal "*")
+#   2. The corpus-driven smoke spec
+#      (spec/wild/analyzers/permission/analyzers/wildcard_corpus_matcher_spec.rb)
+#      stays green — it runs WildcardMatcher against every entry
+#   3. CHANGELOG entry under Wild::Analyzers::Permission
 #
 # Tracked in council rev2 § F4. Source:
 # /home/jeremy/000-projects/wild/wild-rails-ai-ops/000-docs/013-AT-AUDT-thinker-council-verdict-rev2-2026-05-29.md
 
-version: 1
+version: 2
 
 patterns:
-  - pattern: "User"
-    description: Exact match against a single segment
+  - pattern: "admin.jobs.view"
+    description: Exact match — no wildcard, matches only the identical name
     matches:
-      - "User"
+      - "admin.jobs.view"
     non_matches:
-      - "Users"
-      - "User::Profile"
-      - "user"
+      - "admin.jobs.retry"
+      - "admin.jobs"
+      - "admin.jobs.view.extra"
+      - "admin.jobs.View"
       - ""
 
-  - pattern: "User::Profile"
-    description: Exact match against a double-segment path
+  - pattern: "admin.jobs.*"
+    description: >-
+      Trailing wildcard — matches any name beginning "admin.jobs." including
+      deeper paths (greedy: "*" is ".*" and crosses dots; NOT direct-child only).
+      "*" is zero-or-more, so "admin.jobs." (trailing dot, "*" matched nothing)
+      also matches — pins against a ".*" → ".+" "must have at least one char"
+      refactor.
     matches:
-      - "User::Profile"
+      - "admin.jobs.retry"
+      - "admin.jobs.view"
+      - "admin.jobs.retry.force"
+      - "admin.jobs."
     non_matches:
-      - "User"
-      - "User::Profile::Email"
-      - "Admin::User::Profile"
+      - "admin.jobs"
+      - "admin.users.delete"
+      - "billing.invoices.read"
 
-  - pattern: "User::*"
-    description: Suffix wildcard — matches any direct child segment, NOT grandchildren
+  - pattern: "admin.*"
+    description: Top-level prefix wildcard — matches any name beginning "admin."
     matches:
-      - "User::Profile"
-      - "User::Settings"
-      - "User::Admin"
+      - "admin.jobs.retry"
+      - "admin.users.delete"
+      - "admin.x"
     non_matches:
-      - "User"
-      - "User::Profile::Email"
-      - "Admin::User"
+      - "admin"
+      - "billing.invoices.read"
+      - "superadmin.jobs.retry"
 
-  - pattern: "*::Admin"
-    description: Prefix wildcard — matches any single-parent ::Admin
+  - pattern: "admin.*.retry"
+    description: >-
+      Middle wildcard — matches "admin." + anything + ".retry" (greedy: the
+      middle "*" spans one OR more segments)
     matches:
-      - "User::Admin"
-      - "Product::Admin"
+      - "admin.jobs.retry"
+      - "admin.a.b.retry"
     non_matches:
-      - "Admin"
-      - "User::Settings::Admin"
-      - "User::Admin::Permissions"
+      - "admin.jobs.view"
+      - "admin.retry"
+      - "billing.jobs.retry"
 
-  - pattern: "User::**"
-    description: Recursive wildcard — matches User and any descendant segments
+  # --- Grammar-defining rows (Hickey F4 gate, Finding 1). These pin the
+  # escaping contract: "*" is the SOLE metacharacter, everything else is a
+  # literal, because Regexp.escape runs before the "*" → ".*" substitution.
+  # They are the rows that go red if a refactor changes the escape order. ---
+
+  - pattern: ".*"
+    description: >-
+      Leading-dot-literal, NOT universal — ".*" escapes to "\." then "*"→".*",
+      giving /\A\..*\z/, i.e. a LEADING LITERAL DOT followed by anything. Proves
+      "." is literal and "*" is the only metachar. (Universal match is bare "*".)
     matches:
-      - "User"
-      - "User::Profile"
-      - "User::Profile::Email"
-      - "User::Settings::Notifications::Push"
+      - ".x"
+      - ".anything.here"
     non_matches:
-      - "Users"
-      - "Admin::User"
+      - "literal"
+      - "x.y"
+      - ""
+
+  - pattern: "a.b"
+    description: >-
+      Mid-pattern dot is literal — matches only "a.b", never "aXb". A naive
+      matcher that treated "." as regex "any char" would wrongly match "aXb".
+    matches:
+      - "a.b"
+    non_matches:
+      - "aXb"
+      - "ab"
+
+  - pattern: "a+b"
+    description: >-
+      "+" is a literal, not a regex quantifier — matches only "a+b", never the
+      "aaab" a real regex "+" would produce. Pins Regexp.escape coverage of
+      metacharacters beyond ".".
+    matches:
+      - "a+b"
+    non_matches:
+      - "aaab"
+      - "ab"
+
+  - pattern: "a*c"
+    description: >-
+      Embedded "*" is zero-or-more — matches "ac" ("*" matched nothing) and
+      "abc". Pins the zero-width property against a ".*" → ".+" refactor.
+    matches:
+      - "ac"
+      - "abc"
+      - "axyzc"
+    non_matches:
+      - "a"
+      - "c"
+      - "ab"
 
   - pattern: "*"
-    description: Universal wildcard — matches any non-empty segment string
+    description: >-
+      Universal wildcard — matches every string, including the empty string.
+      Has no non_matches by construction (".*" anchored matches anything).
     matches:
-      - "User"
-      - "User::Profile"
-      - "Admin"
-    non_matches:
+      - "admin.jobs.retry"
+      - "billing.invoices.read"
+      - "basic_introspection"
       - ""
-
-  - pattern: "!User::Admin"
-    description: Negation — explicitly excludes the named path (consumer composes with other patterns)
-    matches: []
-    non_matches:
-      - "User::Admin"
-
-  - pattern: "User::*::Profile"
-    description: Wildcard middle segment — matches one intermediate segment, NOT two
-    matches:
-      - "User::Public::Profile"
-      - "User::Admin::Profile"
-    non_matches:
-      - "User::Profile"
-      - "User::Public::Settings::Profile"
+    non_matches: []
