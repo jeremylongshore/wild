@@ -46,12 +46,14 @@ require_relative "support/wild_hooks/hook_fixtures"
 require_relative "support/wild_skillops/fixtures"
 require_relative "support/wild_analyzers_permission/fixtures"
 require_relative "support/wild_analyzers_test_flakes/fixtures"
+require_relative "support/wild_telemetry_collector/event_fixtures"
 
 RSpec.configure do |config|
   config.include Wild::Hooks::TestSupport::HookFixtures
   config.include Wild::Skillops::TestSupport::Fixtures
   config.include Wild::Analyzers::Permission::TestSupport::Fixtures
   config.include Wild::Analyzers::TestFlakes::TestSupport::Fixtures
+  config.include Wild::Telemetry::Collector::TestSupport::EventFixtures
   config.expect_with :rspec do |expectations|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true
   end
