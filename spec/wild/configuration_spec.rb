@@ -94,6 +94,15 @@ RSpec.describe Wild::Configuration do
       expect(telemetry.collector.enabled).to be(true)
     end
 
+    # Session-telemetry knobs carried from the old wild-session-telemetry gem
+    # (Role 5 PR-8). Defaults preserved verbatim.
+    it "Collector defaults store to nil, retention_days 90, privacy_mode :strict, max_storage_bytes nil" do
+      expect(telemetry.collector.store).to be_nil
+      expect(telemetry.collector.retention_days).to eq(90)
+      expect(telemetry.collector.privacy_mode).to eq(:strict)
+      expect(telemetry.collector.max_storage_bytes).to be_nil
+    end
+
     it "Pipeline defaults sequence_strategy to :ingest_order" do
       expect(telemetry.pipeline.sequence_strategy).to eq(:ingest_order)
     end

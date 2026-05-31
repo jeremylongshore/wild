@@ -75,7 +75,35 @@ section splits into a separate file.
 
 ### Wild::Telemetry::Collector
 
-- _(pending: P1 code move from `wild-session-telemetry`)_
+- Moved 13 source files from `wild-session-telemetry/lib/wild_session_telemetry/`
+  into `lib/wild/telemetry/collector/` under the 3-deep
+  `Wild::Telemetry::Collector::*` namespace (Role 5 PR-8; first of three
+  Telemetry sub-namespace moves — Pipeline + Analysis follow). Sub-directories
+  preserved: `schema/`, `store/`, `privacy/`, `collector/`, `export/`,
+  `aggregation/`. Module Zeitwerk-rewritten from compact form. New loader at
+  `lib/wild/telemetry/collector.rb`. (The gem's internal `collector/`
+  submodule nests as `Collector::Collector::EventReceiver` — behavior-preserving;
+  any flatten/rename is a deferred behavior change.)
+- 17 specs (unit + adversarial + integration) moved to
+  `spec/wild/telemetry/collector/`. `EventFixtures` rewrapped as
+  `Wild::Telemetry::Collector::TestSupport::EventFixtures`, wired into spec_helper.
+- **F1 — `Wild::Configuration::Telemetry::Collector` extended** from 1 setting
+  (`enabled` from PR-B) to 5: the 4 old-gem knobs (`store`, `retention_days`
+  90, `privacy_mode` :strict, `max_storage_bytes`) plus `enabled`. Defaults
+  verbatim. Deleted `version.rb` + `configuration.rb`; orphaned
+  `configuration_spec.rb` removed (coverage folded into central config spec).
+- **MIN-Armstrong — `Wild::Telemetry::Collector::Error` subtree added**:
+  `ValidationError`, `SchemaError`, `StorageError`. Old gem's
+  `ConfigurationError` subsumed by `Wild::ConfigurationError`.
+- Config setter validation + freeze!/frozen? machinery NOT carried over;
+  4 freeze/immutability adversarial specs (doc-005 Rule 8, doc-006 Threat 7)
+  deleted per F3 (no vanity tests of absent behavior). Rationale inline.
+- Pre-existing complexity in the moved aggregation/export code tripped wild's
+  stricter Metrics config — localized inline disables per site (no refactor;
+  behavior-preserving move).
+- **NOT in this PR** (deferred per Beck Tidy-First, all `wild-rvv.5` children):
+  F7 boundary normalization (`5.1`), F8 decomplect identity/value/time (`5.2`),
+  MIN-Kleppmann append-only-log fsync decision (`5.3`), F6 export audit (`5.4`).
 
 ### Wild::Telemetry::Pipeline
 

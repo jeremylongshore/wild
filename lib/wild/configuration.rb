@@ -99,9 +99,26 @@ module Wild
 
     # Telemetry has three sub-namespaces; group them under a parent.
     class Telemetry
-      Collector = Struct.new(:enabled, keyword_init: true) do
+      # Collector carries the session-telemetry knobs the old gem exposed
+      # (store, retention_days, privacy_mode, max_storage_bytes) plus the
+      # PR-B `enabled` flag. Defaults preserved verbatim; the gem's per-setter
+      # validation + freeze! machinery is NOT carried over (no-freeze design).
+      Collector = Struct.new(
+        :enabled,
+        :store,
+        :retention_days,
+        :privacy_mode,
+        :max_storage_bytes,
+        keyword_init: true
+      ) do
         def initialize(**kwargs)
-          super(enabled: kwargs.fetch(:enabled, true))
+          super(
+            enabled: kwargs.fetch(:enabled, true),
+            store: kwargs.fetch(:store, nil),
+            retention_days: kwargs.fetch(:retention_days, 90),
+            privacy_mode: kwargs.fetch(:privacy_mode, :strict),
+            max_storage_bytes: kwargs.fetch(:max_storage_bytes, nil)
+          )
         end
       end
 

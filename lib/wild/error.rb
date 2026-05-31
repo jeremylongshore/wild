@@ -78,6 +78,20 @@ module Wild
 
   module Telemetry
     class Error < Wild::Error; end
+
+    # Collector sub-namespace errors (from wild-session-telemetry).
+    module Collector
+      class Error < Wild::Telemetry::Error; end
+
+      # Raised when an event payload fails validation.
+      class ValidationError < Error; end
+
+      # Raised when an event does not conform to its declared schema.
+      class SchemaError < Error; end
+
+      # Raised when the backing store cannot persist or read events.
+      class StorageError < Error; end
+    end
   end
 
   module Hooks
