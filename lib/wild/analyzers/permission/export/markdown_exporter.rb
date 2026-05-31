@@ -84,8 +84,15 @@ module Wild
               "#{coverage.denied_capabilities.size} | #{pct}% |"
           end
 
+          # Escapes backslash AND pipe (block form avoids gsub replacement-string
+          # backslash interpretation), then neutralizes backticks. The backslash
+          # branch must run in the same pass as pipe so we don't double-escape
+          # the backslashes we introduce. Closes a CodeQL rb/incomplete-sanitization
+          # finding carried in from the wild-permission-analyzer source (escaped
+          # pipe but not backslash) — fixed in-place per the merge-blocking-alert
+          # policy; documented as a scope extension to the Role 5 PR-6 move.
           def escape_md(text)
-            text.to_s.gsub("|", '\\|').gsub("`", "'")
+            text.to_s.gsub(/[\\|]/) { |c| "\\#{c}" }.gsub("`", "'")
           end
         end
       end
