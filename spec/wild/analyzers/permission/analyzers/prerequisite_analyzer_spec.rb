@@ -65,6 +65,15 @@ RSpec.describe Wild::Analyzers::Permission::Analyzers::PrerequisiteAnalyzer do
         findings = analyzer.analyze([cap_a, cap_b, cap_c], [])
         expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(1)
       end
+
+      # Degenerate cycle (Fowler sign-off follow-up): a self-edge is a GRAY
+      # back-edge to the node still on the stack — the most likely regression
+      # under a future "skip self-references" optimization.
+      it "detects a self-loop a -> a as exactly one cycle" do
+        cap_a = Wild::Analyzers::Permission::Models::Capability.new(name: "a", prerequisites: ["a"])
+        findings = analyzer.analyze([cap_a], [])
+        expect(findings.count { |f| f.type == :circular_prerequisite }).to eq(1)
+      end
     end
 
     context "with a long ACYCLIC prerequisite chain (Fowler finding 1 — false-positive guard)" do
