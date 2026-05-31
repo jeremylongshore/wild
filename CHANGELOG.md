@@ -190,7 +190,35 @@ section splits into a separate file.
 
 ### Wild::Analyzers::TestFlakes
 
-- _(pending: P1 code move from `wild-test-flake-forensics` + Beck golden-corpus test)_
+- Moved 21 source files from `wild-test-flake-forensics/lib/wild_test_flake_forensics/`
+  into `lib/wild/analyzers/test_flakes/` under the 3-deep
+  `Wild::Analyzers::TestFlakes::*` namespace (Role 5 PR-7). Sub-directories
+  preserved: `models/`, `parsers/`, `detection/`, `analysis/`, `triage/`,
+  `history/`, `export/`. Module Zeitwerk-rewritten from compact
+  `module WildTestFlakeForensics` to nested form. New loader at
+  `lib/wild/analyzers/test_flakes.rb`.
+- 24 specs (unit + adversarial + integration) moved to
+  `spec/wild/analyzers/test_flakes/`. Fixtures module (`TestFixtures`)
+  rewrapped as `Wild::Analyzers::TestFlakes::TestSupport::Fixtures`; spec
+  references to the old `TestFixtures::BASE_TIMESTAMP` constant rewritten to
+  the new path; wired into spec_helper.
+- **F1 — `Wild::Configuration::Analyzers::TestFlakes` extended** from 1 setting
+  (`classifier_corpus_path` from PR-B) to 5: the 4 old-gem knobs (`minimum_runs`
+  3, `flake_rate_threshold` 0.1, `max_history_entries` 10_000, `severity_weights`
+  all-1.0 four-signal map) plus `classifier_corpus_path`. Defaults verbatim.
+  Deleted the old gem's `version.rb` + `configuration.rb`; orphaned
+  `configuration_spec.rb` removed (coverage folded into central config spec).
+  `json_exporter.rb`'s metadata `version:` now reads `Wild::VERSION`.
+- **MIN-Armstrong — `Wild::Analyzers::TestFlakes::Error` subtree added**:
+  `ParseError`, `DetectionError`, `ExportError`. Old gem's `ConfigurationError`
+  subsumed by `Wild::ConfigurationError`.
+- 3 export files (`json`, `markdown`, `summary`) retained — F6 wire-or-delete
+  audit (Beck named 2 of 3 as half-published) is `wild-rvv.5.4`.
+- Config setter validation + freeze!/frozen? machinery NOT carried over; the
+  freeze adversarial spec deleted per F3.
+- **NOT in this PR** (deferred per Beck Tidy-First): the F3 golden-corpus
+  classifier test (`wild-rvv.7.1`) and the `coverage_analyzer` dedup between
+  Permission + TestFlakes (`wild-rvv.7.2`).
 
 ### Wild::Skillops
 
