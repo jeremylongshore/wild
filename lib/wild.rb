@@ -7,6 +7,7 @@ require "wild/engine"
 require "wild/hooks"
 require "wild/capability_gate"
 require "wild/skillops"
+require "wild/analyzers/permission"
 
 # wild — Rails engine + generator: ten Wild::* namespaces consolidated into one
 # mountable gem. Council-blessed Topology A. See 000-docs/adr/ADR-0001-topology.md

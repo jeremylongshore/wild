@@ -149,6 +149,27 @@ RSpec.describe Wild::Configuration do
       expect(analyzers.permission.cycle_detection).to eq(:strict)
     end
 
+    # Audit-policy knobs carried from the old wild-permission-analyzer gem
+    # (Role 5 PR-6). Defaults preserved verbatim.
+    it "Permission defaults capabilities_path + grants_path to nil (engineer-supplied)" do
+      expect(analyzers.permission.capabilities_path).to be_nil
+      expect(analyzers.permission.grants_path).to be_nil
+    end
+
+    it "Permission defaults risk_levels to the four-tier severity map" do
+      expect(analyzers.permission.risk_levels).to eq(
+        "low" => 1, "medium" => 2, "high" => 3, "critical" => 4
+      )
+    end
+
+    it "Permission defaults wildcard_risk_threshold to medium" do
+      expect(analyzers.permission.wildcard_risk_threshold).to eq("medium")
+    end
+
+    it "Permission defaults max_prerequisite_depth to 10" do
+      expect(analyzers.permission.max_prerequisite_depth).to eq(10)
+    end
+
     it "TestFlakes defaults classifier_corpus_path to nil (engineer-supplied)" do
       expect(analyzers.test_flakes.classifier_corpus_path).to be_nil
     end
