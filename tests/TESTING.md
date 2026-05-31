@@ -2,8 +2,13 @@
 
 > Engineer-owned policy file. AI may update observational sections (## Installed gates, ## Frameworks, ## Last audit, ## Traceability) but not policy sections (## Classification, ## Thresholds, ## Waived layers, ## Compliance overlay).
 
-**Last audit:** 2026-05-28 (P0 — pre-namespace-move state)
-**Policy hash-pin:** not yet initialized (fresh repo)
+**Last audit:** 2026-05-31 (post-namespace-move — all 10 namespaces consolidated; grade A− 90/100)
+**Policy hash-pin:** `.harness-hash` initialized (0 files pinned — no auto-discoverable artifacts yet)
+
+> **Engineer action items from the 2026-05-31 re-audit** (policy sections — AI did not self-edit):
+> 1. `## Classification` line "Namespaces … are placeholder `.keep` files until P1 lands" is now false — namespaces fully implemented. Update when convenient.
+> 2. `## Waived layers` mutation/property/CRAP rationale cites placeholder code; that premise is false now. Re-defer with current rationale or install the gates (revisit trigger has fired).
+> 3. `spec/spec_helper.rb:40` `minimum_coverage_by_file 75` is still commented out; the F3 placeholder rationale no longer holds — lift it (98.29% line coverage now) + re-pin.
 
 ---
 
@@ -74,14 +79,14 @@ phase.
 | L1 | Local git hooks (plain-shell) | Installed; engineer runs `scripts/install-hooks` once per clone | `scripts/git-hooks/{pre-commit,commit-msg,pre-push}`, `scripts/install-hooks` |
 | L1 | Dependabot | Installed | `.github/dependabot.yml` |
 | L2 | RuboCop (+ rails + rspec cops) | Installed, CI-enforced | `.rubocop.yml`, `ci.yml lint` job |
-| L2 | Packwerk (namespace boundary) | Installed, CI-enforced; per-namespace `package.yml` ABSENT (Role 4 deliverable in P1) | `packwerk.yml`, `ci.yml boundary` job |
+| L2 | Packwerk (namespace boundary) | Installed; root + **all 10 per-namespace `package.yml` present**; `boundary` job `continue-on-error` until `spec/dummy/` lands (P2) | `packwerk.yml`, 11× `package.yml`, `ci.yml boundary` job |
 | L2 | brakeman | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
 | L2 | bundler-audit | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
-| L3 | RSpec | Installed (one real spec: `spec/engine/version_spec.rb`); per-namespace specs LAND in P1 | `spec/spec_helper.rb`, `.rspec`, `ci.yml test` matrix |
-| L3 | SimpleCov + Cobertura | Installed (gated by `COVERAGE=1`) | `spec/spec_helper.rb` |
-| L3 | Codecov upload | Installed; **`CODECOV_TOKEN` secret missing** | `ci.yml test` job, `codecov.yml` |
-| L4 | spec/dummy/ Rails app | ABSENT | (gap — P2) |
-| L5 | CodeQL (`security-extended`) | Installed on PR #6 | `.github/workflows/codeql.yml` |
+| L3 | RSpec | Installed — **2988 examples / 0 failures across all 10 namespaces**; 98.29% line coverage | `spec/spec_helper.rb`, `.rspec`, `ci.yml test` matrix |
+| L3 | SimpleCov + Cobertura | Installed (gated by `COVERAGE=1`); `minimum_coverage 85` enforced; `minimum_coverage_by_file 75` still commented (P1 — lift-able) | `spec/spec_helper.rb` |
+| L3 | Codecov upload | Installed; **`CODECOV_TOKEN` set 2026-05-30**; 9 per-component status checks live | `ci.yml test` job, `codecov.yml` |
+| L4 | spec/dummy/ Rails app | ABSENT (P2 — Role 8) | (gap — keeps boundary+brakeman informational) |
+| L5 | CodeQL (`security-extended`) | Installed — **merged to main (PR #6, 2026-05-29)**; runs on PRs | `.github/workflows/codeql.yml` |
 | L6 | Cucumber / .feature files | ABSENT (waived) | n/a |
 | L7 | UAT lifecycle | ABSENT (waived) | n/a |
 
@@ -107,14 +112,16 @@ phase.
 
 | Field | Value |
 |---|---|
-| Date | 2026-05-28 |
-| Branch | `feat/test-baseline` (audit landed in PR #7 → main as f3462eb) |
-| Grade | C (62/100) — see commit `f3462eb` for the diagnostic snapshot |
-| P0 gaps at audit | 3 (audit-harness install, pre-commit hooks, 13 uncovered MUSTs) |
-| P0 gaps after this install | 1 (only the 13 uncovered MUSTs remain — bead-tracked under `wild-rvv.*`, owned by Roles 4-9 per build orchestration). L0 + L1 closed. |
-| P1 gaps after this install | 5 (CODECOV_TOKEN was set; per-namespace package.yml + 5 SHOULDs + persona/journey coverage + characterization-test pattern remain) |
-| `/implement-tests` execution | L0 + L1 + harness-hash init landed on `feat/test-implement-l0-l1` 2026-05-29 |
-| Re-audit cadence | End of P1 (after Role 7 closes `wild-rvv.7.1`) to lift waivers + measure namespace-level coverage |
+| Date | 2026-05-31 (post-namespace-move re-audit) |
+| Branch | `feat/role6-pr1-f2-audit-emission` |
+| Grade | **A− (90/100)** — see `TEST_AUDIT.md` for the full snapshot |
+| P0 gaps | **0** — L1/L2/L3 installed + CI-enforced; coverage gate, Codecov, CodeQL all live |
+| P1 gaps | 2 (per-file coverage floor still commented out — now lift-able; mutation/property/CRAP waiver rationale stale — decision point fired) |
+| P2 gaps | `spec/dummy/` absent (Role 8); TESTING.md policy-section drift flagged for engineer |
+| Verified | 2988 examples / 0 failures; 98.29% line coverage; all 11 package.yml present; CodeQL on main; CODECOV_TOKEN set |
+| Handoff | None — no infra gap; remaining P1 items are engineer-owned policy decisions |
+| Prior audit | 2026-05-28 grade C (62/100), pre-namespace-move (PR #7, f3462eb) |
+| Re-audit cadence | After Role 6/7 close the deferred behavior beads (F2/F3/F7/F8) + Role 8 lands `spec/dummy/` → lift L4 waiver + measure namespace-level coverage |
 
 ## Audit-harness installation (L0)
 
