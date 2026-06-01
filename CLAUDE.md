@@ -7,7 +7,7 @@
 - **Language**: Ruby (Rails 7.1+ engine gem)
 - **Repo**: https://github.com/jeremylongshore/wild
 - **License**: MIT
-- **Status**: v0.1.0 in flight per 4-week consolidation build plan
+- **Status**: v0.0.1 in flight (no tags yet) — P1 of the 4-week build, Role 6 in progress. v0.1.0 cuts at Role 11 after the stopwatch gate. Live state: `build-orchestration/STATUS.md`
 
 ## Canonical decisions (do NOT re-litigate)
 
