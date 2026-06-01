@@ -45,12 +45,11 @@ RSpec.describe "Full pipeline integration" do
       expect(events.size).to eq(1)
 
       event = events.first
-      expect(event["event"]).to eq("capability_evaluation")
-      expect(event["result"]).to eq("allowed")
-      expect(event["caller_id"]).to eq("service-account:introspection-agent")
+      expect(event["outcome"]).to eq("allow")
+      expect(event["subject"]).to eq("service-account:introspection-agent")
       expect(event["capability"]).to eq("basic_introspection")
       expect(event["risk_level"]).to eq("standard")
-      expect(event["session_id"]).to eq("integration-test-session")
+      expect(event.dig("extra", "session_id")).to eq("integration-test-session")
       expect(event["reason"]).to be_nil
     end
     # rubocop:enable RSpec/MultipleExpectations, RSpec/ExampleLength
@@ -67,7 +66,7 @@ RSpec.describe "Full pipeline integration" do
       expect(result.reason).to eq(:unknown_capability)
 
       event = audit_events.first
-      expect(event["result"]).to eq("denied")
+      expect(event["outcome"]).to eq("deny")
       expect(event["reason"]).to eq("unknown_capability")
       expect(event["risk_level"]).to eq("unknown")
     end
@@ -84,7 +83,7 @@ RSpec.describe "Full pipeline integration" do
       expect(result.reason).to eq(:not_granted)
 
       event = audit_events.first
-      expect(event["result"]).to eq("denied")
+      expect(event["outcome"]).to eq("deny")
       expect(event["reason"]).to eq("not_granted")
       expect(event["risk_level"]).to eq("critical")
     end
@@ -101,7 +100,7 @@ RSpec.describe "Full pipeline integration" do
       expect(result.reason).to eq(:prerequisite_not_met)
 
       event = audit_events.first
-      expect(event["result"]).to eq("denied")
+      expect(event["outcome"]).to eq("deny")
       expect(event["reason"]).to eq("prerequisite_not_met")
       expect(event["prerequisites_passed"]).to be false
     end
@@ -115,8 +114,8 @@ RSpec.describe "Full pipeline integration" do
 
       events = audit_events
       expect(events.size).to eq(3)
-      expect(events.pluck("caller_id")).to eq(%w[agent-1 agent-2 agent-3])
-      expect(events.pluck("result")).to eq(%w[allowed denied denied])
+      expect(events.pluck("subject")).to eq(%w[agent-1 agent-2 agent-3])
+      expect(events.pluck("outcome")).to eq(%w[allow deny deny])
     end
   end
 
@@ -145,7 +144,7 @@ RSpec.describe "Full pipeline integration" do
       )
 
       event = audit_events.first
-      expect(event["context"]).to eq(
+      expect(event.dig("extra", "context")).to eq(
         "environment" => "staging",
         "request_id" => "req-42"
       )

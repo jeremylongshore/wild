@@ -45,8 +45,8 @@ RSpec.describe Wild::CapabilityGate::Audit::JsonLinesWriter do
 
       line = File.read(log_file.path).strip
       parsed = JSON.parse(line)
-      expect(parsed["event"]).to eq("capability_evaluation")
-      expect(parsed["caller_id"]).to eq("service-account:test-agent")
+      expect(parsed["outcome"]).to eq("allow")
+      expect(parsed["subject"]).to eq("service-account:test-agent")
     end
 
     it "appends multiple events on separate lines" do
@@ -64,7 +64,7 @@ RSpec.describe Wild::CapabilityGate::Audit::JsonLinesWriter do
       lines = File.readlines(log_file.path)
       expect(lines.size).to eq(2)
       expect(JSON.parse(lines.first)["existing"]).to be true
-      expect(JSON.parse(lines.last)["event"]).to eq("capability_evaluation")
+      expect(JSON.parse(lines.last)["outcome"]).to eq("allow")
     end
 
     it "returns nil" do
@@ -91,7 +91,7 @@ RSpec.describe Wild::CapabilityGate::Audit::JsonLinesWriter do
       new_writer.write(event)
 
       expect(File.exist?(new_path)).to be true
-      expect(JSON.parse(File.read(new_path).strip)["event"]).to eq("capability_evaluation")
+      expect(JSON.parse(File.read(new_path).strip)["outcome"]).to eq("allow")
 
       File.delete(new_path)
     end

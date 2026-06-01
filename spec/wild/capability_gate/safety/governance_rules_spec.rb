@@ -235,14 +235,14 @@ RSpec.describe "Governance rules (003-TQ-STND-governance-model.md)" do
       gate.evaluate(caller: "service-account:introspection-agent", capability: :basic_introspection)
 
       expect(audit_events.size).to eq(1)
-      expect(audit_events.first["result"]).to eq("allowed")
+      expect(audit_events.first["outcome"]).to eq("allow")
     end
 
     it "produces an audit event for denied (unknown capability) evaluations" do
       gate.evaluate(caller: "agent", capability: :nonexistent)
 
       expect(audit_events.size).to eq(1)
-      expect(audit_events.first["result"]).to eq("denied")
+      expect(audit_events.first["outcome"]).to eq("deny")
       expect(audit_events.first["reason"]).to eq("unknown_capability")
     end
 
@@ -250,7 +250,7 @@ RSpec.describe "Governance rules (003-TQ-STND-governance-model.md)" do
       gate.evaluate(caller: "agent", capability: :admin_tools)
 
       expect(audit_events.size).to eq(1)
-      expect(audit_events.first["result"]).to eq("denied")
+      expect(audit_events.first["outcome"]).to eq("deny")
       expect(audit_events.first["reason"]).to eq("not_granted")
     end
 
@@ -261,7 +261,7 @@ RSpec.describe "Governance rules (003-TQ-STND-governance-model.md)" do
       )
 
       expect(audit_events.size).to eq(1)
-      expect(audit_events.first["result"]).to eq("denied")
+      expect(audit_events.first["outcome"]).to eq("deny")
       expect(audit_events.first["reason"]).to eq("prerequisite_not_met")
     end
 

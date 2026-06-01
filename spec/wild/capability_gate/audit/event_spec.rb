@@ -27,10 +27,10 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
         )
       end
 
-      it 'creates an event with result "allowed"' do
+      it 'creates an event with outcome "allow"' do
         event = described_class.from_evaluation(result, registry: registry)
 
-        expect(event.result).to eq("allowed")
+        expect(event.outcome).to eq("allow")
         expect(event.reason).to be_nil
         expect(event.prerequisites_passed).to be true
       end
@@ -41,10 +41,10 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
         expect(event.risk_level).to eq("elevated")
       end
 
-      it "includes the caller_id and capability" do
+      it "includes the subject and capability" do
         event = described_class.from_evaluation(result, registry: registry)
 
-        expect(event.caller_id).to eq("service-account:introspection-agent")
+        expect(event.subject).to eq("service-account:introspection-agent")
         expect(event.capability).to eq("privileged_introspection")
       end
 
@@ -78,10 +78,10 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
         )
       end
 
-      it 'creates an event with result "denied"' do
+      it 'creates an event with outcome "deny"' do
         event = described_class.from_evaluation(result, registry: registry)
 
-        expect(event.result).to eq("denied")
+        expect(event.outcome).to eq("deny")
         expect(event.reason).to eq("not_granted")
       end
 
@@ -140,7 +140,7 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
     end
 
     # rubocop:disable RSpec/MultipleExpectations, RSpec/ExampleLength -- schema conformance test validates all fields together
-    it "produces a hash matching Doc 002 Section 8 schema" do
+    it "produces a hash matching the audit_event.yml contract (wild-rvv.4.1.3)" do
       event = described_class.from_evaluation(
         result,
         registry: registry,
@@ -149,17 +149,20 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
       )
       h = event.to_h
 
-      expect(h["event"]).to eq("capability_evaluation")
       expect(h["timestamp"]).to eq("2026-03-17T12:00:00.000Z")
-      expect(h["caller_id"]).to eq("service-account:introspection-agent")
+      expect(h["subject"]).to eq("service-account:introspection-agent")
       expect(h["capability"]).to eq("privileged_introspection")
       expect(h["risk_level"]).to eq("elevated")
-      expect(h["result"]).to eq("allowed")
+      expect(h["outcome"]).to eq("allow")
       expect(h["reason"]).to be_nil
+      expect(h["rationale"]).to eq("granted")
+      expect(h["policy_version"]).to match(/\Acapabilities\.yml@sha256:[a-f0-9]{64}\z/)
+      expect(h["decision_id"]).to match(/\A[0-9a-f-]{36}\z/)
       expect(h["prerequisites_checked"]).to eq(["file_exists"])
       expect(h["prerequisites_passed"]).to be true
-      expect(h["session_id"]).to eq("sess-001")
-      expect(h["context"]).to eq({ "env" => "test" })
+      # session_id + arbitrary context are consumer-open: under `extra`, not top-level.
+      expect(h["extra"]).to eq({ "session_id" => "sess-001", "context" => { "env" => "test" } })
+      expect(h).not_to have_key("event")
     end
     # rubocop:enable RSpec/MultipleExpectations, RSpec/ExampleLength
 
@@ -201,14 +204,30 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
     end
   end
 
-  describe "validation" do
-    it "rejects invalid result values" do
-      expect do
-        described_class.new(
-          timestamp: timestamp, caller_id: "test", capability: "test",
-          risk_level: "standard", result: "maybe"
+  describe "outcome normalization (never raises — runs inside the rescue path)" do
+    # F2: Event construction happens inside Evaluator#evaluate's rescue handler.
+    # A raise here would re-open the silent-denial hole. So an unrecognized
+    # outcome collapses to the evaluation_error sentinel rather than raising —
+    # a stray value can never produce an auditless denial. (wild-rvv.4.1.3,
+    # Armstrong gate.)
+    it "collapses an unrecognized outcome to evaluation_error instead of raising" do
+      event = described_class.new(
+        timestamp: timestamp, subject: "test", capability: "test",
+        risk_level: "standard", outcome: "maybe",
+        policy_version: Wild::CapabilityGate::Registry::UNKNOWN_POLICY_VERSION
+      )
+      expect(event.outcome).to eq("evaluation_error")
+    end
+
+    it "accepts the three contract outcomes verbatim" do
+      %w[allow deny evaluation_error].each do |outcome|
+        event = described_class.new(
+          timestamp: timestamp, subject: "test", capability: "test",
+          risk_level: "standard", outcome: outcome,
+          policy_version: Wild::CapabilityGate::Registry::UNKNOWN_POLICY_VERSION
         )
-      end.to raise_error(ArgumentError, /invalid result/)
+        expect(event.outcome).to eq(outcome)
+      end
     end
   end
 end
