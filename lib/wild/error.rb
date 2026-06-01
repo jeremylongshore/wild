@@ -54,9 +54,18 @@ module Wild
     # Policy file is malformed, missing, or self-inconsistent.
     class PolicyError < Error; end
 
-    # F2 mandate: raised when a `rescue` path in the gate emits a structured
-    # audit event with `outcome: :evaluation_error` and denies the request.
-    # Never silent — always paired with an audit event.
+    # F2 mandate: marks the "gate machinery itself broke" failure mode. The
+    # shipped contract is fail-closed-DENY, not raise: when a `rescue` path in
+    # `Evaluator#evaluate` catches a raise, it emits a structured audit event
+    # with `result: "evaluation_error"` and returns a denial — it never raises
+    # out of `evaluate`. Never silent: always paired with an audit event,
+    # emitted BEFORE the denial is returned (see audit_liveness_spec ordering
+    # examples, wild-rvv.4.1.1).
+    #
+    # This class is currently DECLARED but NOT RAISED anywhere — it is reserved
+    # for an opt-in raising mode keyed off `Wild.config.capability_gate
+    # .on_evaluation_error` (also currently inert). Whether to wire that mode or
+    # cut both the class and the knob is tracked under wild-28y.
     class EvaluationError < Error; end
   end
 

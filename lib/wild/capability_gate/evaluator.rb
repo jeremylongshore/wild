@@ -2,6 +2,30 @@
 
 module Wild
   module CapabilityGate
+    # Coercions that must NEVER raise — used inside Evaluator#evaluate's rescue
+    # handler, where a second raise would propagate an exception with no audit
+    # written (the F2 hole this gate exists to close). Extracted as a collaborator
+    # so the originating raise (a hostile caller_id/capability whose #to_s/#to_sym
+    # itself raises) collapses to a stable, greppable placeholder instead.
+    # (Armstrong F2 gate, wild-rvv.4.1.1.)
+    module SafeCoercion
+      private
+
+      # Coerce to a Symbol without ever raising; nil or a raising #to_sym → :unknown.
+      def safe_symbol(value)
+        value&.to_sym || :unknown
+      rescue StandardError
+        :unknown
+      end
+
+      # Coerce to a String without ever raising; a raising #to_s → placeholder.
+      def safe_caller_id(value)
+        String(value)
+      rescue StandardError
+        "<uncoercible-caller-id>"
+      end
+    end
+
     # The core access decision engine.
     #
     # Given a caller identity and capability name, determines whether the caller
@@ -15,6 +39,8 @@ module Wild
     #
     # See also: 003-TQ-STND-governance-model.md (fail-closed, no implicit grants)
     class Evaluator
+      include SafeCoercion
+
       require_relative "evaluator/grant_loader"
 
       def initialize(registry:, grants:, audit_writer: nil, session_id: nil)
@@ -65,11 +91,15 @@ module Wild
       private
 
       def deny_evaluation_error(caller_id, capability_name, error)
+        # This runs INSIDE evaluate's rescue handler — it must NEVER raise, or
+        # evaluate would propagate an exception with no audit written (the exact
+        # F2 hole this path exists to close). The original raise may have been
+        # the coercion of a hostile caller_id/capability (a `to_s`/`to_sym` that
+        # itself raises), so re-coerce defensively with literal fallbacks rather
+        # than String()/to_sym directly. (Armstrong F2 gate, wild-rvv.4.1.1.)
         EvaluationResult.denied(
-          # caller_id / capability_name may not have coerced if the raise
-          # happened during coercion; String()/to_sym defensively.
-          capability_name: capability_name&.to_sym || :unknown,
-          caller_id: String(caller_id),
+          capability_name: safe_symbol(capability_name),
+          caller_id: safe_caller_id(caller_id),
           reason: :evaluation_error,
           details: "evaluation failed: #{error.class}"
         )
