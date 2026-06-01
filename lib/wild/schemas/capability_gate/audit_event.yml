@@ -3,23 +3,44 @@
 # Per ADR-0003 + 003-AT-ARCH § "Audit trail (F2 fix)": every capability-gate
 # decision path emits exactly one structured audit event matching this shape.
 # Council rev2 §F2 (Armstrong's most-leveraged finding): rescue paths inside
-# the gate MUST emit an event AND deny the request. `outcome: :evaluation_error`
+# the gate MUST emit an event AND deny the request. `outcome: evaluation_error`
 # is the F2 sentinel — never silent.
 #
-# Format: JSON Schema (draft 2020-12). Loaded by Wild::CapabilityGate at
-# boot; verified at runtime via json-schema gem (Role 6 wires the
-# validator). Audit consumers (downstream log/metric pipelines) can read
-# this same file to know what shape to expect.
+# Format: JSON Schema (draft 2020-12). This file is the published contract:
+# audit consumers (downstream log/metric pipelines) read it to know the shape
+# to expect, and a round-trip conformance spec validates real
+# `Wild::CapabilityGate::Audit::Event#to_h` output against it so the two cannot
+# silently re-drift (wild-rvv.4.1.3; the runtime json-schema validator is wired
+# at emit time under wild-rvv.4.1.2).
+#
+# Reconciled 2026-05-31 (wild-rvv.4.1.3) against the shipped runtime Event, with
+# Armstrong (F2 audit) + Hickey (schema-as-data) sign-off:
+#   - `result`→`outcome` (enum allow/deny/evaluation_error), `caller_id`→`subject`
+#     (the published contract names).
+#   - `audit_emit_ms` REMOVED: it measured the time spent emitting THIS event —
+#     a value unknowable at the event's (frozen) construction, and a fact about
+#     the logging subsystem, not about the decision. An audit record describes
+#     the DECISION; emit timing is telemetry. Liveness is asserted behaviorally
+#     (exactly-one-emission per evaluate), not by a field in the value.
+#   - `reason` + `risk_level` + `prerequisites_*` PROMOTED to first-class fields:
+#     they are the gate's own explanation of its decision ("why was this denied,
+#     how dangerous was it") — the first thing an incident responder reads — and
+#     must be schema-validated, not buried in `extra`.
+#   - `capability` pattern allows dots: real capability names are dotted
+#     (`admin.jobs.view`), matching the wildcard corpus grammar.
+#   - `policy_version` is a hash of the PARSED+normalized policy, not the file
+#     bytes (a comment/whitespace edit must not change the policy version), so
+#     audit replay groups correctly by the policy that was actually applied.
 #
 # Source: /home/jeremy/000-projects/wild/wild-rails-ai-ops/000-docs/013-AT-AUDT-thinker-council-verdict-rev2-2026-05-29.md § F2
 # Architecture: 000-docs/003-AT-ARCH-architecture.md § "Audit trail (F2 fix)"
 
 "$schema": "https://json-schema.org/draft/2020-12/schema"
-title: Wild::CapabilityGate audit event (v1)
+title: Wild::CapabilityGate audit event (v2)
 description: |
   One audit event per capability-gate decision. Emitted exactly once per
-  Gate#evaluate call, including paths that fall into a rescue block (F2 —
-  outcome: :evaluation_error always paired with an audit event, never silent).
+  Evaluator#evaluate call, including paths that fall into a rescue block (F2 —
+  outcome: evaluation_error always paired with an audit event, never silent).
 type: object
 required:
   - timestamp
@@ -29,7 +50,6 @@ required:
   - outcome
   - policy_version
   - rationale
-  - audit_emit_ms
 additionalProperties: false
 properties:
   timestamp:
@@ -41,16 +61,21 @@ properties:
     type: string
     format: uuid
     description: |
-      Unique per-decision UUID. Used to correlate the audit event with
-      downstream telemetry events and any consumer-side trace span.
+      Per-event correlation HANDLE (UUID v4), not a content identity. Two
+      identical decisions at different times are two distinct facts with two
+      distinct decision_ids. Used to correlate this audit event with downstream
+      telemetry events and any consumer-side trace span. Content-level dedup, if
+      ever needed, is computed over the content fields (timestamp + subject +
+      capability + outcome + policy_version), NOT over decision_id.
 
   capability:
     type: string
-    pattern: "^[a-z][a-z0-9_]*$"
+    pattern: "^[a-z][a-z0-9_.]*$"
     description: |
-      The capability name the subject attempted to exercise. Symbol-like
-      identifier (lowercase + underscores). Matched against the policy via
-      the shared wildcard corpus (`lib/wild/schemas/wildcard_corpus.yml`).
+      The capability name the subject attempted to exercise. Lowercase
+      identifier; dotted (`admin.jobs.view`) or flat (`basic_introspection`).
+      Matched against the policy via the shared wildcard corpus
+      (`lib/wild/schemas/wildcard_corpus.yml`).
 
   subject:
     type: string
@@ -65,39 +90,60 @@ properties:
       - deny
       - evaluation_error
     description: |
-      :allow — capability granted; :deny — capability refused by policy;
-      :evaluation_error — exception rescued inside the gate (F2 hard-fail).
-      Schema enforces that no fourth outcome can sneak in.
+      allow — capability granted; deny — capability refused by policy;
+      evaluation_error — exception rescued inside the gate (F2 hard-fail,
+      always paired with an audit event). Schema enforces that no fourth
+      outcome can sneak in.
 
   policy_version:
     type: string
     pattern: "^capabilities\\.yml@sha256:[a-f0-9]{64}$"
     description: |
-      SHA-256 fingerprint of the capabilities.yml file used for the
-      decision. Allows audit replay against a known policy state.
+      SHA-256 fingerprint of the PARSED + normalized capability set used for
+      the decision (NOT the file bytes — a comment or whitespace edit must not
+      change the version). Enables audit replay against a known policy state and
+      correct grouping of decisions by the policy actually applied. The
+      all-zero hash is the sentinel for "policy provenance unavailable" (e.g. a
+      registry constructed without a fingerprint).
 
   rationale:
     type: string
     minLength: 1
     description: |
-      Human-readable one-line explanation. Examples:
-        "matched_rule:admin_introspection_read_only"
-        "no_rule_matched"
-        "evaluation_error:NoMethodError on policy node 'capabilities[3].when'"
+      Human-readable one-line explanation derived from the outcome + reason.
+      Examples: "granted", "denied:not_granted", "evaluation_error:NoMethodError".
 
-  audit_emit_ms:
-    type: number
-    minimum: 0
+  # --- Promoted first-class fields: the gate's own explanation of its decision.
+  # Optional (an allow has no reason), but schema-validated when present — these
+  # are the most-read forensic fields and must not drift unschematized. ---
+  reason:
+    type:
+      - string
+      - "null"
     description: |
-      Wall-clock milliseconds spent inside the audit emission. Used by
-      the F2 audit-liveness spec to detect emitters that silently fail
-      (a successful emit takes >0 ms).
+      Structured denial reason (filterable/aggregatable): unknown_capability,
+      not_granted, prerequisite_not_met, evaluation_error. null on allow.
 
-  # Optional extension fields — consumers may attach additional context.
-  # Schema-level enforcement of additionalProperties: false prevents typo
-  # drift in required fields; extension fields go under `extra`.
+  risk_level:
+    type: string
+    description: |
+      The risk classification of the attempted capability (low/medium/high/
+      critical), or "unknown" when the capability is not in the registry.
+
+  prerequisites_checked:
+    type: array
+    items:
+      type: string
+    description: Prerequisite types evaluated for this decision (may be empty).
+
+  prerequisites_passed:
+    type: boolean
+    description: Whether all prerequisites were satisfied.
+
+  # Genuinely consumer-open extension surface. Host-supplied correlation
+  # (session_id) and arbitrary context live here — NOT the decision's own
+  # explanation (which is first-class above). Keep small (<2 KiB); large
+  # payloads belong in telemetry, not audit.
   extra:
     type: object
-    description: |
-      Optional consumer-defined context. Keep small (<2 KiB) — large
-      payloads belong in telemetry, not audit.
+    description: Optional consumer-defined context (e.g. session_id, host tags).

@@ -115,6 +115,46 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
+- **F2 audit event shape reconciled with the published schema (closes the
+  design↔runtime loop)** (Role 6 PR-6, `wild-rvv.4.1.3`; Armstrong F2 + Hickey
+  schema-as-data gates, both **APPROVE WITH AMENDMENTS**). The runtime
+  `Audit::Event#to_h` and the design JSON Schema (`audit_event.yml`) had drifted
+  into mutual disagreement (both spec-locked). Resolved by raising the runtime
+  to the corrected published contract (the schema is what downstream audit
+  consumers read), not by "code is truth" — unlike the F4 corpus, the schema's
+  extra fields are genuine audit-grade value, not fiction.
+  - **Naming → contract**: `result`→`outcome` (enum `allow`/`deny`/
+    `evaluation_error`; `allowed`/`denied` remapped), `caller_id`→`subject`.
+  - **`decision_id`** (UUID v4, per-event correlation handle) + **`rationale`**
+    (derived non-empty one-liner) now emitted.
+  - **`policy_version`** added: a SHA-256 of the **parsed + normalized**
+    capability set (NOT file bytes — a comment/whitespace edit must not change
+    the version), resolved once at `Registry` load and frozen, so reading it on
+    the audit (incl. rescue) path does no I/O and never raises. Enables audit
+    replay against a known policy state. A registry without a fingerprint yields
+    an all-zero sentinel that still matches the schema pattern.
+  - **`audit_emit_ms` removed** (both reviewers): it measured the time spent
+    emitting the event itself — unknowable at the frozen value's construction
+    (a causality error), unused by the real liveness spec, and a fact about the
+    logging subsystem, not the decision. Liveness stays asserted behaviorally
+    (exactly-one-emission per evaluate).
+  - **`reason` + `risk_level` + `prerequisites_*` promoted to first-class schema
+    fields** (reviewers overrode the initial "bury under `extra`" plan): they are
+    the gate's own explanation of its decision — the first thing an incident
+    responder reads — and must be schema-validated. Only consumer-open
+    `session_id` + `context` live under `extra`.
+  - **`capability` pattern fixed** to accept dotted names (`admin.jobs.view`),
+    matching the wildcard corpus grammar.
+  - **Never-raising total outcome remap**: an unrecognized outcome collapses to
+    the `evaluation_error` sentinel instead of raising (Event construction runs
+    inside the rescue path — a raise would reopen the F2 silent-denial hole).
+    Pinned by a spec; the old `ArgumentError`-on-invalid-result behavior is gone.
+  - **Round-trip conformance gate** (Hickey's most-costly finding): real
+    `Event#to_h` output is validated against `audit_event.yml` (required keys
+    present, no key outside the schema, enum/pattern/minLength conformance) so
+    the two shapes can no longer silently re-drift. Proven to bite (a stray
+    top-level key → red). Full json-schema-gem validation at emit time is
+    `wild-rvv.4.1.2`, which upgrades this structural gate.
 - **F2 audit-emission ordering pinned + a residual silent-denial hole closed**
   (Role 6 PR-5, `wild-rvv.4.1.1`; Armstrong F2 gate **SIGN-OFF**):
   - **Ordering spec (the bead deliverable):** the audit-liveness suite proved

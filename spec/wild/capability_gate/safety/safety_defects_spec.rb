@@ -101,7 +101,7 @@ RSpec.describe "Safety defect conditions (003-TQ-STND Section 6)" do
 
       events = audit_events
       expect(events.size).to eq(4)
-      required_keys = %w[event timestamp caller_id capability result]
+      required_keys = %w[timestamp decision_id capability subject outcome policy_version rationale]
       expect(events).to all(include(*required_keys))
     end
 

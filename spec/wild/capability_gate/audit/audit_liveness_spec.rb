@@ -76,15 +76,15 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
       expect(collecting_writer.events.size).to eq(1)
     end
 
-    it 'records the audit event with result "evaluation_error" — distinct from "denied"' do
+    it 'records the audit event with outcome "evaluation_error" — distinct from "deny"' do
       evaluate!
-      expect(collecting_writer.events.first["result"]).to eq("evaluation_error")
+      expect(collecting_writer.events.first["outcome"]).to eq("evaluation_error")
     end
 
-    it "preserves the caller + capability in the evaluation_error audit record" do
+    it "preserves the subject + capability in the evaluation_error audit record" do
       evaluate!
       event = collecting_writer.events.first
-      expect(event["caller_id"]).to eq("service-account:introspection-agent")
+      expect(event["subject"]).to eq("service-account:introspection-agent")
       expect(event["capability"]).to eq("basic_introspection")
     end
 
@@ -120,7 +120,7 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
         seq = sequence
         writer = Object.new
         writer.define_singleton_method(:write) do |event|
-          seq << [:audit_emitted, event.to_h["result"]]
+          seq << [:audit_emitted, event.to_h["outcome"]]
           nil
         end
         writer
@@ -218,8 +218,8 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
     it "audits under a stable placeholder caller identity (not silent, not crashing)" do
       evaluate!
       event = collecting_writer.events.first
-      expect(event["result"]).to eq("evaluation_error")
-      expect(event["caller_id"]).to eq("<uncoercible-caller-id>")
+      expect(event["outcome"]).to eq("evaluation_error")
+      expect(event["subject"]).to eq("<uncoercible-caller-id>")
     end
   end
 

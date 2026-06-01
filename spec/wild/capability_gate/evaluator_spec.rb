@@ -272,12 +272,11 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
 
         events = parse_audit_log
         expect(events.size).to eq(1)
-        expect(events.first["event"]).to eq("capability_evaluation")
-        expect(events.first["result"]).to eq("allowed")
-        expect(events.first["caller_id"]).to eq("service-account:introspection-agent")
+        expect(events.first["outcome"]).to eq("allow")
+        expect(events.first["subject"]).to eq("service-account:introspection-agent")
         expect(events.first["capability"]).to eq("basic_introspection")
         expect(events.first["risk_level"]).to eq("standard")
-        expect(events.first["session_id"]).to eq("test-session-001")
+        expect(events.first.dig("extra", "session_id")).to eq("test-session-001")
         expect(events.first["reason"]).to be_nil
       end
       # rubocop:enable RSpec/MultipleExpectations
@@ -293,7 +292,7 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
 
         events = parse_audit_log
         expect(events.size).to eq(1)
-        expect(events.first["result"]).to eq("denied")
+        expect(events.first["outcome"]).to eq("deny")
         expect(events.first["reason"]).to eq("unknown_capability")
         expect(events.first["risk_level"]).to eq("unknown")
       end
@@ -309,7 +308,7 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
 
         events = parse_audit_log
         expect(events.size).to eq(1)
-        expect(events.first["result"]).to eq("denied")
+        expect(events.first["outcome"]).to eq("deny")
         expect(events.first["reason"]).to eq("not_granted")
         expect(events.first["risk_level"]).to eq("critical")
       end
@@ -331,7 +330,7 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
 
         events = parse_audit_log
         expect(events.size).to eq(1)
-        expect(events.first["result"]).to eq("denied")
+        expect(events.first["outcome"]).to eq("deny")
         expect(events.first["reason"]).to eq("prerequisite_not_met")
         expect(events.first["prerequisites_passed"]).to be false
       end
@@ -347,7 +346,7 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
 
         events = parse_audit_log
         expect(events.size).to eq(3)
-        expect(events.pluck("caller_id")).to eq(%w[agent-1 agent-2 agent-3])
+        expect(events.pluck("subject")).to eq(%w[agent-1 agent-2 agent-3])
       end
     end
 
@@ -361,7 +360,7 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
         )
 
         events = parse_audit_log
-        expect(events.first["context"]).to eq({ "env" => "production" })
+        expect(events.first.dig("extra", "context")).to eq({ "env" => "production" })
       end
     end
 
