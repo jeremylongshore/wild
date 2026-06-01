@@ -115,6 +115,32 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
+- **F2 audit-emission ordering pinned + a residual silent-denial hole closed**
+  (Role 6 PR-5, `wild-rvv.4.1.1`; Armstrong F2 gate **SIGN-OFF**):
+  - **Ordering spec (the bead deliverable):** the audit-liveness suite proved
+    the error event is emitted (count + payload) but not its *ordering*. Added
+    examples that pin **emit-completes-before-the-denial-returns** via a
+    sequence-recording writer; proven to bite (reorder the rescue to
+    return-before-emit → 2 red). The bead's original "re-raise" framing predated
+    the shipped fail-closed contract — `evaluate` denies, never raises — so the
+    invariant is "emit before the terminal *return*", the same audit-completeness
+    guarantee. Spec documents the guarantee is synchronous-writer-scoped (async
+    writers need a separate durability invariant — `wild-28y`).
+  - **Closed a residual silent-denial path (Armstrong Finding 2, fixed in-PR):**
+    a hostile `caller_id` whose `#to_s` raises blew up the first coercion in
+    `evaluate`; the rescue then re-coerced the same object in
+    `deny_evaluation_error`, **raising a second time inside the rescue handler**
+    → `evaluate` propagated an exception with no audit written. Now coerced via
+    a never-raising `SafeCoercion` collaborator (`safe_symbol` → `:unknown`,
+    `safe_caller_id` → `"<uncoercible-caller-id>"`), so the gate still fails
+    closed, still audits, and never raises on malformed input. Pinned by 4 new
+    examples.
+  - **Doc-truth fixes:** the `CapabilityGate::EvaluationError` docstring no
+    longer claims the error is "raised" (it is declared but never raised — the
+    gate denies); the inert `on_evaluation_error: :hard_fail` config default now
+    carries an inline "CURRENTLY INERT" warning so no operator infers raise
+    semantics. Both reconciled under decide-or-cut `wild-28y`. Armstrong's
+    dark-audit-ALLOW posture finding filed as `wild-0c3` (P1).
 - **F2 audit-emission fix (council rev2, Armstrong)** — closes the two
   audit-blind paths the council named (Role 6 PR-1, `wild-rvv.4.1`):
   - **Evaluation that raises now leaves an audit trail.** `Evaluator#evaluate`

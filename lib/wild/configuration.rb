@@ -91,7 +91,13 @@ module Wild
       def initialize(**kwargs)
         super(
           capabilities_path: kwargs.fetch(:capabilities_path, nil),
-          # F2 mandate: :evaluation_error is hard-fail. Default reflects this.
+          # CURRENTLY INERT (Armstrong F2 gate, wild-28y): Evaluator#evaluate
+          # unconditionally fails closed (deny + audit, never raises) and does
+          # NOT read this knob. The :hard_fail default documents intent but does
+          # nothing yet — setting it does NOT produce raise semantics. Wiring an
+          # opt-in raising mode (emit-then-raise Wild::CapabilityGate::
+          # EvaluationError) or cutting the knob is decide-or-cut under wild-28y.
+          # Do not infer raise-on-eval-error behaviour from this default.
           on_evaluation_error: kwargs.fetch(:on_evaluation_error, :hard_fail)
         )
       end
