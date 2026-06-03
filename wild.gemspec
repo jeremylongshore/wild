@@ -51,6 +51,12 @@ Gem::Specification.new do |spec|
   # Development (alphabetical — Gemspec/OrderedDependencies)
   spec.add_development_dependency "brakeman", "~> 8.0"
   spec.add_development_dependency "bundler-audit", "~> 0.9"
+  # Audit-event schema validation (F2, wild-rvv.4.1.2). json_schemer supports
+  # JSON Schema draft 2020-12 (audit_event.yml); the transitive `json-schema`
+  # gem from mcp does NOT. Dev-scope: validation defaults on in dev/test, off in
+  # prod; prod opt-in requires the consumer to add json_schemer themselves (the
+  # validator lazily requires it and raises a clear error if absent).
+  spec.add_development_dependency "json_schemer", "~> 2.3"
   spec.add_development_dependency "packwerk", "~> 3.2"
   spec.add_development_dependency "rspec", "~> 3.13"
   spec.add_development_dependency "rspec-rails", "~> 8.0"

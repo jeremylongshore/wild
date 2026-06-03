@@ -70,12 +70,17 @@ properties:
 
   capability:
     type: string
-    pattern: "^[a-z][a-z0-9_.]*$"
     description: |
-      The capability name the subject attempted to exercise. Lowercase
-      identifier; dotted (`admin.jobs.view`) or flat (`basic_introspection`).
-      Matched against the policy via the shared wildcard corpus
-      (`lib/wild/schemas/wildcard_corpus.yml`).
+      The capability name the subject ATTEMPTED to exercise, recorded verbatim.
+      No pattern constraint: an audit event must be able to record a denied
+      malformed/probing attempt (e.g. an attacker trying "" or "12345") — that
+      is precisely the kind of denial you most want audited. Validity of
+      *registered* capability names (lowercase dotted identifiers like
+      `admin.jobs.view`, matched via `lib/wild/schemas/wildcard_corpus.yml`) is
+      enforced upstream at definition time by `Capability#validate_name`, not on
+      this record-of-an-attempt field. (wild-rvv.4.1.2 — surfaced by wiring the
+      validator: the strict pattern would have blocked auditing denied garbage
+      capability names, a silent-denial hole.)
 
   subject:
     type: string

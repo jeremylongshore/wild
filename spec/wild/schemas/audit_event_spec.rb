@@ -55,15 +55,16 @@ RSpec.describe "lib/wild/schemas/capability_gate/audit_event.yml" do
     end
   end
 
-  describe "capability pattern" do
-    # Real capability names are dotted (admin.jobs.view) or flat
-    # (basic_introspection); the pattern must accept both (wild-rvv.4.1.3).
-    it "accepts dotted and flat lowercase identifiers, rejects uppercase/leading-digit" do
-      pattern = Regexp.new(schema.fetch("properties").fetch("capability").fetch("pattern"))
-      expect("admin.jobs.view").to match(pattern)
-      expect("basic_introspection").to match(pattern)
-      expect("Admin.Jobs").not_to match(pattern)
-      expect("9lives").not_to match(pattern)
+  describe "capability field" do
+    # wild-rvv.4.1.2: capability records the ATTEMPTED name verbatim and is an
+    # unconstrained string — an audit event must be able to record a denied
+    # malformed/probing attempt ("" / "12345"), or the gate cannot audit attacks
+    # (a silent-denial hole). Validity of registered capabilities is enforced
+    # upstream at definition time, not on this record-of-an-attempt field.
+    it "is an unconstrained string (records the attempted name verbatim, no pattern)" do
+      capability = schema.fetch("properties").fetch("capability")
+      expect(capability.fetch("type")).to eq("string")
+      expect(capability).not_to have_key("pattern")
     end
   end
 
@@ -127,12 +128,11 @@ RSpec.describe "lib/wild/schemas/capability_gate/audit_event.yml" do
 
     it "emits values conforming to the schema's enum + patterns + minLength" do
       enum = schema.dig("properties", "outcome", "enum")
-      cap_re = Regexp.new(schema.dig("properties", "capability", "pattern"))
       pv_re = Regexp.new(schema.dig("properties", "policy_version", "pattern"))
       sample_events.each do |event|
         h = event.to_h
         expect(enum).to include(h["outcome"])
-        expect(h["capability"]).to match(cap_re)
+        expect(h["capability"]).to be_a(String) # unconstrained — records the attempt verbatim
         expect(h["policy_version"]).to match(pv_re)
         expect(h["rationale"]).not_to be_empty
         expect(h["decision_id"]).to match(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)

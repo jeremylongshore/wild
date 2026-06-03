@@ -41,6 +41,7 @@ module Wild
   # Per `ADR-0003`, this configuration substrate sits at "Tier 0" — it's
   # public to every namespace; every namespace reads its own slice. No
   # namespace owns or mutates another namespace's settings at runtime.
+  # rubocop:disable Metrics/ClassLength -- data aggregator: holds every namespace's nested settings Struct, so its length grows with the namespace count by design, not with logic complexity
   class Configuration
     # Settings classes for each namespace.
     #
@@ -86,6 +87,7 @@ module Wild
     CapabilityGate = Struct.new(
       :capabilities_path,
       :on_evaluation_error,
+      :validate_audit_events,
       keyword_init: true
     ) do
       def initialize(**kwargs)
@@ -98,7 +100,13 @@ module Wild
           # opt-in raising mode (emit-then-raise Wild::CapabilityGate::
           # EvaluationError) or cutting the knob is decide-or-cut under wild-28y.
           # Do not infer raise-on-eval-error behaviour from this default.
-          on_evaluation_error: kwargs.fetch(:on_evaluation_error, :hard_fail)
+          on_evaluation_error: kwargs.fetch(:on_evaluation_error, :hard_fail),
+          # F2 (wild-rvv.4.1.2): validate every emitted audit event against
+          # audit_event.yml. `:auto` (default) → on in dev/test, off in prod
+          # (validation cost is real; a non-conforming event is a developer bug
+          # we want surfaced in dev/test, not in production). `true`/`false`
+          # force the behaviour regardless of environment.
+          validate_audit_events: kwargs.fetch(:validate_audit_events, :auto)
         )
       end
     end
@@ -366,4 +374,5 @@ module Wild
       @skillops = Skillops.new
     end
   end
+  # rubocop:enable Metrics/ClassLength
 end

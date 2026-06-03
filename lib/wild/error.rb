@@ -67,6 +67,15 @@ module Wild
     # .on_evaluation_error` (also currently inert). Whether to wire that mode or
     # cut both the class and the knob is tracked under wild-28y.
     class EvaluationError < Error; end
+
+    # Raised when an emitted audit event fails validation against
+    # `lib/wild/schemas/capability_gate/audit_event.yml` (F2, wild-rvv.4.1.2).
+    # Fires ONLY when audit-event validation is enabled (dev/test by default,
+    # off in prod): a non-conforming event is a developer bug that must surface
+    # loudly, NOT be swallowed by the gate's fail-closed rescue. Production
+    # (validation off) never raises this — the never-raises guarantee is a
+    # production guarantee.
+    class AuditSchemaError < Error; end
   end
 
   module Introspection
