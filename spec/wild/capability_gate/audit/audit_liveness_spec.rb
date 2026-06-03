@@ -312,6 +312,79 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
       expect(result).to be_allowed
     end
   end
+
+  describe "audit-event schema validation toggle (F2, wild-rvv.4.1.2)" do
+    # A deliberately non-conforming event injected at emit time. When validation
+    # is on (dev/test), the gate must SURFACE it (a non-conforming event is a
+    # developer bug); when off (prod default), the gate must NOT raise — its
+    # never-raises fail-closed guarantee is a production guarantee.
+    let(:bad_event) do
+      instance_double(Wild::CapabilityGate::Audit::Event, to_h: { "outcome" => "maybe" })
+    end
+
+    let(:evaluator) do
+      Wild::CapabilityGate::Evaluator.from_files(
+        capabilities_path: capabilities_path,
+        grants_path: grants_path,
+        audit_writer: collecting_writer
+      )
+    end
+
+    before do
+      allow(Wild::CapabilityGate::Audit::Event).to receive(:from_evaluation).and_return(bad_event)
+    end
+
+    def evaluate!
+      evaluator.evaluate(
+        caller_id: "service-account:introspection-agent",
+        capability_name: :basic_introspection
+      )
+    end
+
+    context "when validate_audit_events = true" do
+      before { Wild.configure { |c| c.capability_gate.validate_audit_events = true } }
+
+      it "raises AuditSchemaError out of evaluate (surfaces the developer bug, not swallowed)" do
+        expect { evaluate! }.to raise_error(Wild::CapabilityGate::AuditSchemaError)
+      end
+
+      it "does not write the non-conforming event" do
+        begin
+          evaluate!
+        rescue Wild::CapabilityGate::AuditSchemaError
+          nil
+        end
+        expect(collecting_writer.events).to be_empty
+      end
+    end
+
+    context "when validate_audit_events = false (prod default posture)" do
+      before { Wild.configure { |c| c.capability_gate.validate_audit_events = false } }
+
+      it "does NOT raise — fail-closed never-raises guarantee preserved" do
+        expect { evaluate! }.not_to raise_error
+      end
+
+      it "still writes the event (validation off ≠ audit off)" do
+        evaluate!
+        expect(collecting_writer.events.size).to eq(1)
+      end
+    end
+
+    context "with :auto (default) — keys off Wild.config.environment" do
+      before { Wild.configure { |c| c.capability_gate.validate_audit_events = :auto } }
+
+      it "validates (raises) in :test" do
+        Wild.configure { |c| c.environment = :test }
+        expect { evaluate! }.to raise_error(Wild::CapabilityGate::AuditSchemaError)
+      end
+
+      it "skips validation (no raise) in :production" do
+        Wild.configure { |c| c.environment = :production }
+        expect { evaluate! }.not_to raise_error
+      end
+    end
+  end
 end
 
 # rubocop:enable RSpec/DescribeClass, RSpec/MultipleMemoizedHelpers

@@ -75,6 +75,14 @@ module Wild
 
         emit_audit(result, context)
         result
+      rescue Wild::CapabilityGate::AuditSchemaError
+        # F2 (wild-rvv.4.1.2): a non-conforming audit event is a developer bug,
+        # not a runtime fault — surface it. This only fires when validation is
+        # enabled (dev/test by default), so production (validation off) keeps the
+        # never-raises guarantee untouched. Must come BEFORE the StandardError
+        # rescue, or the schema violation would be misreported as an
+        # evaluation_error denial.
+        raise
       rescue StandardError => e
         # F2 (council rev2, Armstrong): the decision logic raised — fail closed
         # AND leave an audit trail. The prerequisite checkers are fail-closed
@@ -163,7 +171,15 @@ module Wild
         event = Audit::Event.from_evaluation(
           result, registry: @registry, session_id: @session_id, context: context
         )
+        # F2 (wild-rvv.4.1.2): in dev/test, prove the event conforms to
+        # audit_event.yml BEFORE it is written. A schema violation re-raises
+        # (caught by evaluate's AuditSchemaError rescue → surfaces as a dev/test
+        # failure); it is NOT swallowed by the StandardError rescue below, which
+        # exists for genuine write/IO failures. Off in prod by default.
+        Audit::SchemaValidator.validate!(event.to_h) if Audit::SchemaValidator.enabled?
         @audit_writer.write(event)
+      rescue Wild::CapabilityGate::AuditSchemaError
+        raise
       rescue StandardError => e
         log_audit_failure(e, result)
         nil

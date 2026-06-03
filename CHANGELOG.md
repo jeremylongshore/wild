@@ -115,6 +115,36 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
+- **F2 audit events validated against the published schema at emit time**
+  (Role 6 PR-7, `wild-rvv.4.1.2`). Wires a real JSON Schema **draft 2020-12**
+  validator (`json_schemer` — the transitive `json-schema` gem from `mcp` only
+  does draft-04) against `audit_event.yml`, upgrading the test-time round-trip
+  conformance gate (wild-rvv.4.1.3) to per-event runtime validation.
+  - **New `Audit::SchemaValidator`** — memoized compiled schema; `validate!`
+    raises `Wild::CapabilityGate::AuditSchemaError` (new error subclass) with a
+    greppable per-error message; `valid?` returns a boolean; `enabled?` resolves
+    the toggle.
+  - **Config toggle** `Wild.config.capability_gate.validate_audit_events`:
+    `:auto` (default — on in dev/test, off in prod), or `true`/`false` to force.
+    Validation cost is real; a non-conforming event is a developer bug we want
+    surfaced in dev/test, never in production.
+  - **F2-safe wiring**: `Evaluator#emit_audit` validates between build and write;
+    an `AuditSchemaError` is **re-raised** (both `emit_audit` and `evaluate` let
+    it through, ordered before the `StandardError` rescue) so a non-conforming
+    event surfaces loudly in dev/test — while genuine write/IO failures stay
+    fail-closed-and-logged. Production (validation off) keeps the exact
+    never-raises guarantee. Proven end-to-end: a bogus emitted `outcome` turns
+    the suite red.
+  - **Schema correctness fix surfaced by the validator**: the `capability`
+    field's strict `^[a-z][a-z0-9_.]*$` pattern was **removed** (now an
+    unconstrained string). An audit event records the *attempted* capability
+    verbatim — a denied malformed/probing attempt (`""`, `"12345"`) must be
+    auditable, or the gate cannot audit attacks (a silent-denial hole).
+    Registered-capability validity is enforced upstream at definition time by
+    `Capability#validate_name`, not on this record-of-an-attempt field.
+  - **Note**: the bead's original `audit_emit_ms > 0` liveness clause is
+    superseded — wild-rvv.4.1.3 removed that field (Armstrong's causality
+    finding); liveness is asserted behaviorally (exactly-one-emission).
 - **F2 audit event shape reconciled with the published schema (closes the
   design↔runtime loop)** (Role 6 PR-6, `wild-rvv.4.1.3`; Armstrong F2 + Hickey
   schema-as-data gates, both **APPROVE WITH AMENDMENTS**). The runtime
