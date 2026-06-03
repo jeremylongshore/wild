@@ -265,6 +265,45 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
       evaluate!
       expect(logger).to have_received(:error).with(/audit emission failed: IOError/)
     end
+
+    # Armstrong F2 finding 4 (wild-wxk): a pathological exception whose #message
+    # itself raises must not turn a should-have-logged into terminal silence —
+    # the class is always logged, the message degrades to a placeholder.
+    context "when the write error's own #message raises" do
+      let(:pathological_writer) do
+        bad_error = Class.new(StandardError) do
+          def message = raise("message itself raises")
+        end
+        Class.new do
+          define_method(:write) { |_event| raise(bad_error) }
+        end.new
+      end
+
+      let(:evaluator_with_pathological_writer) do
+        Wild::CapabilityGate::Evaluator.from_files(
+          capabilities_path: capabilities_path,
+          grants_path: grants_path,
+          audit_writer: pathological_writer
+        )
+      end
+
+      it "still logs the failure with the error class + a degraded message (not silent)" do
+        evaluator_with_pathological_writer.evaluate(
+          caller_id: "service-account:introspection-agent",
+          capability_name: :basic_introspection
+        )
+        expect(logger).to have_received(:error).with(/audit emission failed:.*<unprintable message>/)
+      end
+
+      it "does not raise out of the gate" do
+        expect do
+          evaluator_with_pathological_writer.evaluate(
+            caller_id: "service-account:introspection-agent",
+            capability_name: :basic_introspection
+          )
+        end.not_to raise_error
+      end
+    end
   end
 
   describe "when BOTH the audit writer AND the logger are broken (terminal silent path)" do

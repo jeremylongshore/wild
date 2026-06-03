@@ -144,6 +144,39 @@ RSpec.describe Wild::CapabilityGate::Gate do
       expect(result.capability_name).to eq(:admin_tools)
       expect(result.caller_id).to eq("test-agent")
     end
+
+    # Armstrong F2 fast-follow contract (wild-wxk). The invariant being pinned:
+    # Evaluator#evaluate never raises (its own rescue emits the evaluation_error
+    # event + denies), so today the Gate's outer rescue is unreachable. That
+    # invariant is UNGUARDED — if a future refactor removes the Evaluator's
+    # rescue, the Gate's outer rescue becomes the backstop, and it is audit-blind
+    # BY CONSTRUCTION (the Gate holds no audit writer; emission lives in the
+    # Evaluator). The two examples above already pin that the backstop fails
+    # closed; the example below pins the displaced-hole's defining property —
+    # when the Gate rescue fires, NO audit event is written, so a missing event
+    # is the signal that the Evaluator's contract was violated.
+    #
+    # NOTE on mechanism: the finding originally proposed `allow_any_instance_of`,
+    # but Evaluator#initialize calls `freeze`, and RSpec cannot install a
+    # partial-double proxy on a frozen instance (the real method runs instead).
+    # Swapping @evaluator for a verifying instance_double is the working
+    # equivalent and is what these examples use.
+    it "writes NO audit event when the Gate-level rescue fires (audit-blind by construction)" do
+      require "tempfile"
+      log = Tempfile.new(["gate-rescue", ".jsonl"])
+      gate = described_class.new(config_path: config_path, audit_log_path: log.path)
+
+      broken_evaluator = instance_double(Wild::CapabilityGate::Evaluator)
+      allow(broken_evaluator).to receive(:evaluate).and_raise(RuntimeError, "contract violated")
+      gate.instance_variable_set(:@evaluator, broken_evaluator)
+
+      result = gate.evaluate(caller: "svc:agent", capability: :basic_introspection)
+
+      expect(result.reason).to eq(:evaluation_error)
+      expect(File.read(log.path)).to be_empty # the displaced F2 hole: emission was bypassed
+    ensure
+      log.close!
+    end
   end
 
   describe "#capabilities" do

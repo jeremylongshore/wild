@@ -115,6 +115,25 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
+- **F2 fast-follow: Gate-rescue contract pinned + log-failure hardened**
+  (Role 6 PR-8, `wild-wxk`; Armstrong F2 sign-off findings 2 + 4 — **closes the
+  F2 epic `wild-rvv.4.1`**).
+  - **Finding 2 — Gate-rescue contract test.** `Gate#evaluate`'s outer rescue is
+    audit-blind *by construction* (the Gate holds no writer; emission lives in
+    the Evaluator). It is safe only because `Evaluator#evaluate` never raises —
+    an unguarded invariant. Added a spec proving that when the Gate-level rescue
+    fires, it still fails closed with `:evaluation_error` AND **no audit event is
+    written** (the missing event is the signal that the Evaluator's contract was
+    violated — the F2 hole displaced one layer up). Mechanism note: the finding
+    proposed `allow_any_instance_of`, but `Evaluator#initialize` freezes the
+    instance and RSpec cannot proxy a frozen object, so a verifying
+    `instance_double` swap is the working equivalent.
+  - **Finding 4 — `log_audit_failure` hardened.** A pathological exception whose
+    `#message` itself raises would have turned a should-have-logged into terminal
+    silence. The error *class* is now always logged; the message degrades to
+    `<unprintable message>` via a never-raising `safe_message` helper (added to
+    the `SafeCoercion` collaborator). Proven: bypassing `safe_message` reddens
+    the suite.
 - **F2 audit events validated against the published schema at emit time**
   (Role 6 PR-7, `wild-rvv.4.1.2`). Wires a real JSON Schema **draft 2020-12**
   validator (`json_schemer` — the transitive `json-schema` gem from `mcp` only
