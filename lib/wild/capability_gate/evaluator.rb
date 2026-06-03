@@ -24,6 +24,16 @@ module Wild
       rescue StandardError
         "<uncoercible-caller-id>"
       end
+
+      # #message on an arbitrary rescued exception is not guaranteed safe (a
+      # pathological exception can override it to raise). Degrade to a placeholder
+      # rather than lose a should-have-logged line (Armstrong F2 finding 4,
+      # wild-wxk).
+      def safe_message(error)
+        error.message
+      rescue StandardError
+        "<unprintable message>"
+      end
     end
 
     # The core access decision engine.
@@ -189,8 +199,12 @@ module Wild
         logger = Wild.config.audit_logger
         return unless logger.respond_to?(:error)
 
+        # error.class is always safe; error.message is guarded (a pathological
+        # exception whose #message raises must not turn a should-have-logged
+        # into terminal silence — we still log the class). Armstrong F2
+        # fast-follow finding 4 (wild-wxk).
         logger.error(
-          "[wild:capability_gate] audit emission failed: #{error.class}: #{error.message} " \
+          "[wild:capability_gate] audit emission failed: #{error.class}: #{safe_message(error)} " \
           "(caller=#{result.caller_id.inspect} capability=#{result.capability_name.inspect} " \
           "reason=#{result.reason.inspect})"
         )
