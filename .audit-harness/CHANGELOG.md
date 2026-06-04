@@ -2,6 +2,47 @@
 
 All notable changes are recorded here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.1.5] - 2026-06-03
+
+### Added — npm release pipeline (closes the publish-pipeline gap)
+
+This is the first release published to npm via CI with Sigstore provenance. Until now the repo had **no release workflow** — npm was stuck at `0.1.0` while the code (and every other manifest) had advanced through `1.0.0` → `1.1.4`, four minors of CHANGELOG-documented work that never reached consumers. `npm install @intentsolutions/audit-harness` resolved to the stale `0.1.0` tarball.
+
+- **`.github/workflows/release.yml`** (NEW): mirrors the provenance approach of `intent-eval-core`'s release workflow, adapted for this zero-dependency polyglot CLI (no pnpm, no lockfile, no TS build, no coverage). Triggers on `push` of a `v*.*.*` tag and on `workflow_dispatch`. Sets `id-token: write` for npm/Sigstore OIDC. Verifies the pushed tag matches `package.json#version` (skipped on manual dispatch since there's no tag), runs the `node bin/audit-harness.js --version` self-check + the repo's `escape-scan.sh --staged` test script (non-blocking on no-staged-diff), then `npm publish --provenance --access public`. The `NPM_TOKEN` repo secret is already configured.
+
+### Fixed — package metadata + install.sh URLs for the `intent-audit-harness` repo rename
+
+The GitHub repo was renamed `audit-harness` → `intent-audit-harness`, but the metadata still pointed at the old path.
+
+- **`package.json`**: `homepage`, `repository.url`, and `bugs.url` repointed from `jeremylongshore/audit-harness` → `jeremylongshore/intent-audit-harness` (these render on npmjs.com).
+- **`python/pyproject.toml` + `rust/Cargo.toml`**: project-URL fields (Homepage / Repository / Issues / Changelog / documentation) repointed to the renamed repo — these render on PyPI and crates.io.
+- **`python/src/intent_audit_harness/__init__.py`**: docstring source-link repointed.
+- **`README.md`**: the `curl … install.sh` line + the two "Related" skill links repointed to the renamed repo.
+- **`install.sh`**: the `REPO=` variable, the usage-comment URLs at the top, and the re-run hint repointed; the default `VERSION` bumped from the stale `v0.1.0` → `v1.1.5`.
+
+### Fixed — install.sh tarball-path glob broke after the rename
+
+The GitHub archive tarball unpacks as `<repo>-<version>/`, which became `intent-audit-harness-1.1.5/` after the rename. The unpack-dir detection used `find … -name 'audit-harness-*'`, and `-name` matches the basename with no implicit leading wildcard, so it matched **nothing** under the new prefix — every vendored install would have failed at "could not find unpacked dir". Changed the glob to `-name '*audit-harness-*'` (leading wildcard), which matches both the current `intent-audit-harness-*` name and legacy `audit-harness-*` tags. Verified against both directory names.
+
+### Added — README badge row
+
+npm-version, License Apache-2.0, and Sigstore-provenance shields under the H1 (mirrors the `intent-eval-core` badge row). The "Part of the Intent Eval Platform" cross-link line is preserved.
+
+### Changed — Version bumped to v1.1.5 across all manifests
+
+Per the `version-canonical-check` CI gate (v1.0.2 PR #35). `package.json` (canonical), `version.txt`, `python/pyproject.toml`, `python/src/intent_audit_harness/__init__.py`, and `rust/Cargo.toml` all report `1.1.5`. (`rust/Cargo.lock` is gitignored; its working-tree entry is aligned for local cargo builds.)
+
+### Why patch, not minor
+
+No new CLI commands, no new flags, no API change, no script behavior change. This is release-engineering + metadata: the publish pipeline that ships the existing `1.1.x` code, plus URL corrections for the repo rename, plus the install.sh glob fix. The pinned policy scripts (`.harness-hash`) are untouched.
+
+### Verification
+
+- `npm pack --dry-run` → tarball contains `bin/`, `scripts/`, `README.md`, `LICENSE`, `NOTICE`, `CHANGELOG.md` per `package.json#files`
+- `node bin/audit-harness.js --version` → `1.1.5`
+- `bash -n install.sh` → exit 0; unpack-dir glob matches `intent-audit-harness-1.1.5` (and legacy `audit-harness-*`)
+- `bash scripts/harness-hash.sh --verify` → OK (no pinned files changed)
+
 ## [v1.1.4] - 2026-05-25
 
 ### Fixed — gherkin-lint.sh prev_blank print-every-line noise (IEP P3, Gemini #71 review chain)
@@ -15,6 +56,7 @@ Closes `iah-gherkin-single-awk-opt` (`bd_000-projects-vawm`, P3). v1.1.2 introdu
 ### Fixed — crap-score.py exclusion sets deduplicated via EXCLUDED_DIRS constant (Gemini #71 review)
 
 Closes `iah-crap-score-exclusion-dedup` (`bd_000-projects-niv8`, P2). Pre-v1.1.4, `scripts/crap-score.py` had TWO separate sets with overlapping intent but divergent contents:
+
 - `ignore` set in `score_python()` (line 85): had `"reports"` but lacked `.next`, `.nuxt`, `.cache`
 - `prune` set in `main()` (line 394, added v1.1.1 for `--json` input-hash walk): had `.next`, `.nuxt`, `.cache` but lacked `"reports"`
 
@@ -102,6 +144,7 @@ AAR: `000-docs/008-AA-AACR-ruff-iep-P6-2026-05-24.md`.
 ### What unblocks next
 
 P6 Phase A2 complete. Next-ready P6 work:
+
 - A3: `iah-eslint-dispatcher` (`bd_000-projects-rnpy`) — eslint coverage for `bin/audit-harness.js`
 - B1: `iep-shared-lint-configs` — `.audit-harness-configs/` for vendoring lint configs to consumer repos
 - Plus 2 bundleable Gemini-found fixes from v1.1.2 review: `iah-gherkin-prev-blank-noise` + `iah-gherkin-single-awk-opt`
@@ -122,13 +165,14 @@ Closes `iah-shellcheck-hard-fail` (`bd_000-projects-4asc`, P1). The shellcheck j
 
 While processing the SC2317 cleanup above, Gemini's PR #38 review surfaced a deeper bug: the gherkin-lint.sh awk-fallback path printed `WARN`/`ERROR` lines via `awk printf` but those subprocesses never incremented the parent shell's `WARN_COUNT`/`ERROR_COUNT` counters. The summary line said "0 warnings, 0 errors" while errors were actively being printed; the exit code stayed 0 regardless. Exactly the silent-failure class the linter exists to surface in OTHER projects.
 
-- **New `process_awk_output()` helper**: wraps each awk subprocess, captures its output, counts `WARN ` / `ERROR ` lines via inline awk (`'/^WARN /{c++} END{print c+0}'` — set-euo-pipefail safe, no `|| true` needed), increments the bash counters, then re-prints. 4 awk blocks now feed through it.
+- **New `process_awk_output()` helper**: wraps each awk subprocess, captures its output, counts `WARN` / `ERROR` lines via inline awk (`'/^WARN /{c++} END{print c+0}'` — set-euo-pipefail safe, no `|| true` needed), increments the bash counters, then re-prints. 4 awk blocks now feed through it.
 - **Verification**: deliberate-failure test against a feature with `Scenario: ... \n And ...` produces exit code 1 + summary `0 warning(s), 1 error(s)` (was: exit 0 + `0 warning(s), 0 error(s)` while still printing the ERROR line). Clean feature still exits 0.
 - **Separate-scope finding**: the third awk script contains a stray top-level `prev_blank = 1` that awk treats as an always-true pattern, triggering its default print-every-line action. That's a pre-existing cosmetic issue (extra noise in script output) but not a counter bug — filed as deferred scope.
 
 ### Changed — Version bumped to v1.1.2 across all 5 manifests
 
 Per the version-canonical-check CI gate (v1.0.2 PR #35). All 5 committed manifest locations now report `1.1.2`:
+
 - `package.json`
 - `version.txt`
 - `python/pyproject.toml`
@@ -156,6 +200,7 @@ AAR: `000-docs/007-AA-AACR-shellcheck-hard-fail-iep-P6-2026-05-24.md`.
 ### What this unblocks in the IEP Convergence Debt Plan
 
 P6 Phase A1 closed. Next-ready P6 work:
+
 - A2: `iah-ruff` — add Python ruff CI gate
 - A3: `iah-eslint-dispatcher` — add eslint coverage for `bin/audit-harness.js`
 - A4: `iah-script-robustness-upstream` (already shipped in v1.1.1; nothing more to do)
@@ -176,6 +221,7 @@ Closes `iah-script-robustness-upstream` (`bd_000-projects-qqkq`, P2). Addresses 
 ### Changed — Version bumped to v1.1.1 across all 5 manifests
 
 Per the version-canonical-check CI gate (added in v1.0.2 PR #35). All 5 committed manifest locations now report `1.1.1`:
+
 - `package.json`
 - `version.txt`
 - `python/pyproject.toml`
@@ -317,7 +363,6 @@ No code, CLI surface, behavior, or runtime dependency changes in this release �
 - infra: convergence Phase A.0 + A — bd init, GH templates, CI workflow, design notes (8f30db4)
 - bd init: initialize beads issue tracking (ffc7597)
 - feat: add PyPI and crates.io wrappers for audit-harness (9b97217)
-
 
 All notable changes to `@intentsolutions/audit-harness` are documented here.
 
