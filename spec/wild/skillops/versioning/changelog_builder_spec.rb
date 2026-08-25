@@ -19,8 +19,8 @@ RSpec.describe Wild::Skillops::Versioning::ChangelogBuilder do
 
     it "returns newest version first" do
       lines = builder.build("changelog.test")
-      expect(lines.first).to match(/1\.2\.0/)
-      expect(lines.last).to match(/1\.0\.0/)
+      expect(lines.first).to include("1.2.0")
+      expect(lines.last).to include("1.0.0")
     end
 
     it "raises NotFoundError for skill with no versions" do

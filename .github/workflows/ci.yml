@@ -14,7 +14,7 @@ jobs:
     name: Lint (RuboCop)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -53,7 +53,7 @@ jobs:
     name: Security (brakeman + bundler-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -78,7 +78,7 @@ jobs:
       matrix:
         ruby-version: ["3.2", "3.3", "3.4"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby ${{ matrix.ruby-version }}
         uses: ruby/setup-ruby@v1
@@ -93,9 +93,25 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: matrix.ruby-version == '3.3'
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage.xml,./coverage/.resultset.json
           fail_ci_if_error: false
           verbose: true
+
+  ci-ok:
+    # Fan-in gate: the single required status check for branch protection on
+    # main. `boundary` (Packwerk) is deliberately NOT in `needs` until
+    # spec/dummy/ exists and the lane can pass; it stays informational.
+    name: CI OK
+    runs-on: ubuntu-latest
+    needs: [lint, security, test]
+    if: always()
+    steps:
+      - name: Fail if any required job failed or was cancelled
+        run: |
+          echo "lint=${{ needs.lint.result }} security=${{ needs.security.result }} test=${{ needs.test.result }}"
+          [ "${{ needs.lint.result }}" = "success" ] && \
+          [ "${{ needs.security.result }}" = "success" ] && \
+          [ "${{ needs.test.result }}" = "success" ]
