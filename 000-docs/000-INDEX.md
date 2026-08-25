@@ -5,7 +5,7 @@
 > (`NNN-CC-ABCD-description.md`, flat, chronological). Architecture decisions live in
 > `adr/` and are numbered separately.
 
-*Last updated: 2026-08-25 (review-wave interlude opened: 009 plan filed; 010/011 reserved).*
+*Last updated: 2026-08-25 (review-wave interlude: 009 plan + 010/010a review record filed; 011 reserved).*
 
 ## Numbered documents
 
@@ -21,7 +21,7 @@
 | 007 | [007-AT-STND-codeql-strategy.md](007-AT-STND-codeql-strategy.md) | standard | CodeQL `security-extended` strategy (ruby + actions) |
 | 008 | [008-AT-AUDT-pre-move-coupling-survey.md](008-AT-AUDT-pre-move-coupling-survey.md) | audit | Static cross-namespace coupling survey of the 10 old gems against ADR-0003 |
 | 009 | [009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md](009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md) | plan | Plan of record for the review-wave interlude between Role 6 and Role 7 |
-| 010 | `010-RA-REVW-review-wave-findings-and-bead-docket-<date>.md` + `010a-…-data.json` | review | (reserved) Review record + machine-readable findings and bead dispositions |
+| 010 | [010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md](010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md) + [010a data.json](010a-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25-data.json) | review | Review-wave record (DRAFT until Stage 4): 89 raw → 18 confirmed P0/P1, 12-lane namespace health, 36-bead docket, council-fix ledger delta, 12 fix clusters |
 | 011 | `011-AA-AACR-strategic-review-and-fix-wave-<date>.md` | AAR | (reserved) After-action report for the review wave |
 
 ## Architecture decision records (`adr/`)
