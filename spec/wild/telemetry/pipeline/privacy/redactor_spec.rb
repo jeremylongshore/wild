@@ -283,5 +283,53 @@ RSpec.describe Wild::Telemetry::Pipeline::Privacy::Redactor do
       expect { redactor.redact_transcript("bad") }
         .to raise_error(Wild::Telemetry::Pipeline::PrivacyError)
     end
+
+    it "redacts secrets copied into a derived Intent#description (f-l03-1 security-review follow-up)" do
+      secret_turn = make_turn(
+        role: :user,
+        content: "I need to deploy with api_key: ABCDEFGHIJKLMNOP1234 to 10.1.2.3"
+      )
+      intent = Wild::Telemetry::Pipeline::Models::Intent.new(
+        description: "I need to deploy with api_key: ABCDEFGHIJKLMNOP1234 to 10.1.2.3",
+        confidence: 0.65,
+        source_turn_index: 0
+      )
+      t = make_transcript(turns: [secret_turn], intents: [intent])
+
+      result = redactor.redact_transcript(t)
+
+      description = result.intents.first.description
+      expect(description).not_to include("ABCDEFGHIJKLMNOP1234")
+      expect(description).not_to include("10.1.2.3")
+      expect(description).to include("[REDACTED]")
+    end
+
+    it "preserves confidence and source_turn_index while redacting an intent's description" do
+      intent = Wild::Telemetry::Pipeline::Models::Intent.new(
+        description: "contact me at leak@example.com",
+        confidence: 0.7,
+        source_turn_index: 2
+      )
+      t = make_transcript(intents: [intent])
+
+      redacted = redactor.redact_transcript(t).intents.first
+
+      expect(redacted.confidence).to eq(0.7)
+      expect(redacted.source_turn_index).to eq(2)
+      expect(redacted.description).not_to include("leak@example.com")
+    end
+  end
+
+  describe "#redact_content idempotency (f-l03-1 item 7 follow-up)" do
+    it "leaves already-redacted content unchanged on a second pass, even when the marker itself " \
+       "looks like a pattern the redactor scans for" do
+      Wild.configure { |c| c.telemetry.pipeline.redaction_marker = "<redacted@wild.local>" }
+      config = Wild.config.telemetry.pipeline
+
+      once = redactor.redact_content("Contact me at real@user.com for help", config: config)
+      twice = redactor.redact_content(once, config: config)
+
+      expect(twice).to eq(once)
+    end
   end
 end

@@ -127,5 +127,22 @@ RSpec.describe Wild::Telemetry::Pipeline::Normalization::ToolExtractor do
       refs = extractor.extract(turns)
       expect(refs).to all(be_a(Wild::Telemetry::Pipeline::Models::ToolReference))
     end
+
+    it "never extracts a name outside the identifier charset every capture pattern is anchored to " \
+       "(f-l03-1: Redactor#redact_transcript intentionally leaves tool_references unredacted " \
+       "because names can't carry a secret shape)" do
+      content = <<~CONTENT
+        [tool_use] inspect_routes({})
+        [tool_result:inspect_routes] done
+        mcp://list_resources
+        I can't find a tool for this: api_key=sk-live-abcdefghijklmnopqrstuvwx
+      CONTENT
+      turns = [make_turn(role: :assistant, content: content)]
+
+      refs = extractor.extract(turns)
+
+      expect(refs).not_to be_empty
+      expect(refs.map(&:name)).to all(match(/\A[a-z_][a-z0-9_-]*\z/i))
+    end
   end
 end

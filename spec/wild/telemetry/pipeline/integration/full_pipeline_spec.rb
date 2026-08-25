@@ -84,6 +84,29 @@ RSpec.describe "Full pipeline integration" do
 
       expect(redactor).to have_received(:redact_turn).exactly(transcripts.sum(&:turn_count)).times
     end
+
+    it "does not leak a secret through a derived Intent#description in the exported JSON " \
+       "(f-l03-1 security-review follow-up)" do
+      # IntentDetector/ToolExtractor run upstream of redaction by design (see
+      # Pipeline.run_pipeline's comment); before this fix, IntentDetector
+      # copied an 80-char verbatim slice of the raw turn content into
+      # Intent#description and Redactor#redact_transcript passed `intents:`
+      # through untouched, so the secret exported inside the intent even
+      # though the turn content and metadata were correctly redacted.
+      line = {
+        type: "human",
+        message: "I need to deploy with api_key: ABCDEFGHIJKLMNOP1234 to 10.1.2.3",
+        timestamp: Wild::Telemetry::Pipeline::TestSupport::TranscriptFixtures::BASE_TIMESTAMP.iso8601
+      }.to_json
+
+      transcripts = Wild::Telemetry::Pipeline.process(line, adapter: adapter, source_id: "session-intent-leak")
+      exported = json_exporter.export(transcripts)
+
+      expect(transcripts.sum(&:intent_count)).to be > 0
+      expect(exported).not_to include("ABCDEFGHIJKLMNOP1234")
+      expect(exported).not_to include("10.1.2.3")
+      expect(exported).to include("\"redacted\":true")
+    end
   end
 
   describe "MCP log pipeline" do

@@ -13,12 +13,13 @@ module Wild
             raise PrivacyError, "transcript must be a Transcript" unless transcript.is_a?(Models::Transcript)
 
             redacted_turns = transcript.turns.map { |turn| redact_turn(turn, config: config) }
+            redacted_intents = transcript.intents.map { |intent| redact_intent(intent, config: config) }
 
             Models::Transcript.new(
               source_type: transcript.source_type,
               source_id: transcript.source_id,
               turns: redacted_turns,
-              intents: transcript.intents,
+              intents: redacted_intents,
               tool_references: transcript.tool_references,
               metadata: redact_metadata(transcript.metadata, config: config).merge(redacted: true),
               created_at: transcript.created_at
@@ -39,12 +40,31 @@ module Wild
             )
           end
 
+          # Redacts intents derived from turn content: #run_pipeline builds
+          # Intent#description from the raw (pre-redaction) turn text so that
+          # detection sees the real content, which means the description is a
+          # secret carrier just like turn content and must be scrubbed here,
+          # the single boundary where every exported field gets redacted
+          # (f-l03-1, the intent-description leak follow-up).
+          def redact_intent(intent, config: Wild.config.telemetry.pipeline)
+            Models::Intent.new(
+              description: redact_content(intent.description, config: config),
+              confidence: intent.confidence,
+              source_turn_index: intent.source_turn_index
+            )
+          end
+
+          # Splits on the configured marker before applying any pattern so an
+          # already-redacted segment is never re-scanned: a marker shaped like
+          # an email or path (e.g. "<redacted@wild.local>") would otherwise
+          # get matched and re-wrapped by a second #redact_content pass,
+          # corrupting it. This makes redaction idempotent regardless of
+          # marker shape (f-l03-1 item 7 follow-up).
           def redact_content(content, config: Wild.config.telemetry.pipeline)
             return content.to_s if content.to_s.strip.empty?
 
-            result = content.dup
-            result = apply_built_in_patterns(result, config)
-            apply_custom_patterns(result, config)
+            marker = config.redaction_marker
+            content.split(marker, -1).map { |segment| redact_segment(segment, config) }.join(marker)
           end
 
           # Scrubs turn/transcript metadata via Privacy::MetadataRedactor: a
@@ -57,6 +77,11 @@ module Wild
           end
 
           private
+
+          def redact_segment(segment, config)
+            result = apply_built_in_patterns(segment, config)
+            apply_custom_patterns(result, config)
+          end
 
           def apply_built_in_patterns(content, config)
             marker = config.redaction_marker

@@ -68,6 +68,14 @@ module Wild
         # extraction rather than redacted here AND again by redact_transcript
         # (f-l03-1 item 7: the double pass was non-idempotent for markers that
         # happen to match a pattern, and did the redaction work twice).
+        #
+        # Redaction is the LAST step that touches any field that gets
+        # exported: intent_detector and tool_extractor run upstream of it on
+        # unredacted turns (by design, see above), so any field they derive
+        # from turn content, e.g. Intent#description, is redacted inside
+        # #redact_transcript, not here, to keep that single boundary complete
+        # (f-l03-1 security-review follow-up: a derived Intent#description
+        # copied a raw content slice past this boundary).
         def run_pipeline(transcript, pipe, config)
           turns = pipe[:normalizer].normalize(transcript.turns, config: config)
           intents = pipe[:intent_detector].detect(turns, config: config)

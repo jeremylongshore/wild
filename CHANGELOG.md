@@ -389,6 +389,31 @@ section splits into a separate file.
   holds this logic (split out of `Redactor` to stay under
   `Metrics/ClassLength`). Advances bead "F7: Add boundary normalization
   wherever data crosses namespaces".
+- **HIGH regression fixed: derived `Intent#description` leaked secrets past
+  the redaction boundary, and `#redact_content` was not idempotent against
+  its own marker** (security-review follow-up on the item above, f-l03-1).
+  Moving `IntentDetector`/`ToolExtractor` upstream of redaction (the fix
+  above) left `Redactor#redact_transcript` passing `transcript.intents`
+  through untouched: `IntentDetector#build_description` copies up to an
+  80-char verbatim slice of raw turn content into `Intent#description`, so a
+  secret in a turn's text (an API key, an IP address) survived into
+  `Export::JsonExporter` output even though the turn itself was correctly
+  redacted, with `metadata.redacted` reporting `true`. `redact_transcript`
+  now maps `transcript.intents` through a new `Redactor#redact_intent`,
+  which redacts `description` via `#redact_content` and re-emits an
+  `Intent` with `confidence`/`source_turn_index` unchanged; keeps
+  `redact_transcript` the single, complete boundary that touches every
+  exported field. `tool_references` are left as-is: every extraction
+  pattern in `ToolExtractor` constrains captured names to
+  `[a-z_][a-z0-9_-]*`, so a name can't carry a secret shape (asserted by a
+  new spec, not a code change). Separately, `#redact_content` is now
+  idempotent against a redaction marker that happens to match one of its
+  own patterns (e.g. an email-shaped marker like
+  `<redacted@wild.local>`): it splits the input on the marker string first
+  and only pattern-matches the segments between marker occurrences, so a
+  future accidental double pass, or any marker shape, can no longer corrupt
+  already-redacted text by re-wrapping it. Advances bead "F7: Add boundary
+  normalization wherever data crosses namespaces".
 
 ### Wild::Telemetry::Analysis
 
