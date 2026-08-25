@@ -121,9 +121,39 @@ RSpec.describe Wild::AdminTools::Audit::AuditedPipeline do
     end
   end
 
-  describe "#two_phase" do
-    it "delegates to the wrapped pipeline" do
-      expect(audited.two_phase).to be_a(Wild::AdminTools::Guard::TwoPhaseFlow)
+  describe "no public reader for the internal guard chain (finding f-l10-4)" do
+    it "does not expose a #two_phase reader at all" do
+      # This confirms an unused PUBLIC handle is gone, not a security
+      # boundary: any in-process object already holding a reference to
+      # @pipeline (or an executor) is trusted code inside this gem's own
+      # process, and could always reach TwoPhaseFlow/executor methods
+      # directly via instance_variable_get regardless of what this class
+      # delegates. See lib/wild/admin_tools.rb's trust-boundary note (wording
+      # corrected, security-review follow-up on f-l10-4, PR #73).
+      expect(audited).not_to respond_to(:two_phase)
+      expect { audited.two_phase }.to raise_error(NoMethodError)
+    end
+
+    it "audits both phases of a destructive execution reached through the PUBLIC surface" do
+      # Drives the documented repro path (NonceManager#generate, then
+      # TwoPhaseFlow#confirm_and_execute) through AuditedPipeline#call, the
+      # one sanctioned entry point (also reachable via Server::ToolHandler)
+      # for both preview and confirm, instead of only asserting that a
+      # private handle is unreachable. Every phase of a real destructive
+      # execution must land in the audit trail (security-review follow-up on
+      # f-l10-4, PR #73).
+      Wild::AdminTools.configuration.job_adapter.seed_job("job_bypass", status: "failed", queue: "critical")
+
+      preview = audited.call("discard_job", { job_id: "job_bypass" }, "caller_1")
+      expect(preview.status).to eq(:preview)
+      nonce = preview.metadata[:nonce]
+
+      confirm = audited.call("discard_job", { job_id: "job_bypass" }, "caller_1", nonce: nonce)
+      expect(confirm.status).to eq(:success)
+
+      records = audit_store.recent(limit: 100)
+      expect(records.map(&:phase)).to include("preview", "execute")
+      expect(Wild::AdminTools.configuration.job_adapter.write_methods_called).not_to be_empty
     end
   end
 

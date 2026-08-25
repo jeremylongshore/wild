@@ -44,7 +44,15 @@ module Wild
             confirmation_nonce: ctx.nonce,
             gate_result: extract_gate_result(ctx.session_context),
             outcome: result.status.to_s,
-            denial_reason: result.denied? ? result.metadata[:reason] : nil,
+            # Prefer the internal reason (nonce not_found/expired/already_used/
+            # mismatch) when present so the audit trail keeps full fidelity even
+            # though the client-facing :reason is deliberately opaque
+            # (Security Decision 8, see guard/nonce_manager.rb). Other denial
+            # paths never set an audit-only key, so this falls back to :reason.
+            # `Result::AUDIT_ONLY_METADATA_KEYS` is the same set
+            # Server::ResponseFormatter strips before the client ever sees it
+            # (security-review follow-up on f-l10-6, PR #73).
+            denial_reason: result.denied? ? (result.metadata[Result::AUDIT_ONLY_METADATA_KEYS.first] || result.metadata[:reason]) : nil, # rubocop:disable Layout/LineLength
             before_snapshot: result.before_snapshot,
             after_snapshot: result.after_snapshot,
             duration_ms: duration_ms

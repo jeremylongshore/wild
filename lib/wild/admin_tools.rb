@@ -10,6 +10,15 @@
 # Role 5 PR-12 (the final namespace move — completes the 10-namespace
 # consolidation).
 #
+# Trust boundary: the guard chain (Guard::Pipeline#call, wrapped by
+# Audit::AuditedPipeline#call and Identity::AuthenticatedPipeline#call) gates
+# the PUBLIC surface reachable by an untrusted external caller (an MCP client
+# via Server::ToolHandler): allowlist, param validation, rate limit,
+# blast-radius, and audit, all enforced before any mutation reaches an
+# executor; it is not a defense against in-process Ruby code, which already
+# runs with this object's privileges and could always reach an executor or
+# TwoPhaseFlow directly (security-review follow-up on f-l10-4, PR #73).
+#
 # Configuration note (wild-rvv.uku): this namespace keeps its
 # `Wild::AdminTools::Configuration` object (cache/job/flag adapters + gate +
 # policy_path + audit settings, all nil-default = dependency-injection points)

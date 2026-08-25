@@ -28,7 +28,7 @@ RSpec.describe "Guard::Pipeline end-to-end lifecycle" do
     flag_adapter.seed_flag("release_flag")
   end
 
-  after { pipeline.two_phase.nonce_manager.store.stop_sweep! }
+  after { nonce_store.stop_sweep! }
 
   it "read action executes directly without a nonce" do
     result = pipeline.call("inspect_job", { job_id: "job-e2e" }, caller_id)
@@ -50,14 +50,14 @@ RSpec.describe "Guard::Pipeline end-to-end lifecycle" do
       preview = pipeline.call("retry_job", { job_id: "job-e2e" }, caller_id)
       nonce = preview.metadata[:nonce]
 
-      entry = pipeline.two_phase.nonce_manager.store.fetch(nonce)
+      entry = nonce_store.fetch(nonce)
       expired_entry = Wild::AdminTools::Guard::NonceEntry.new(
         nonce: entry.nonce, binding_hash: entry.binding_hash,
         action_name: entry.action_name, caller_id: entry.caller_id,
         expires_at: Time.now.utc - 1
       )
-      pipeline.two_phase.nonce_manager.store.instance_variable_get(:@mutex).synchronize do
-        pipeline.two_phase.nonce_manager.store.instance_variable_get(:@entries)[nonce] = expired_entry
+      nonce_store.instance_variable_get(:@mutex).synchronize do
+        nonce_store.instance_variable_get(:@entries)[nonce] = expired_entry
       end
 
       result = pipeline.call("retry_job", { job_id: "job-e2e" }, caller_id, nonce: nonce)

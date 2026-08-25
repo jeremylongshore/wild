@@ -37,9 +37,7 @@ RSpec.describe "MCP Server end-to-end lifecycle" do
     flag_adapter.seed_flag("release_flag")
   end
 
-  after do
-    pipeline.instance_variable_get(:@audited_pipeline).two_phase.nonce_manager.store.stop_sweep!
-  end
+  after { nonce_store.stop_sweep! }
 
   describe "read lifecycle via manage_background_jobs" do
     it "returns success directly for a read action" do

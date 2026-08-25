@@ -122,6 +122,26 @@ RSpec.describe Wild::AdminTools::Audit::Recorder do
       end
     end
 
+    context "with a nonce denial carrying internal_reason (finding f-l10-5)" do
+      let(:nonce_denied_result) do
+        Wild::AdminTools::Result.new(
+          status: :denied,
+          action: "retry_job",
+          operation: "unknown",
+          metadata: { reason: "nonce_invalid", internal_reason: "nonce_already_used" }
+        )
+      end
+
+      it "keeps the granular internal_reason in the audit trail even though the client only sees the opaque reason" do
+        recorder.record(action_name: "retry_job", params: {}, caller_id: "user_1") do
+          nonce_denied_result
+        end
+
+        record = store.recent(limit: 1).first
+        expect(record.denial_reason).to eq("nonce_already_used")
+      end
+    end
+
     context "with an error" do
       before do
         recorder.record(action_name: "retry_job", params: {}, caller_id: "user_1") do

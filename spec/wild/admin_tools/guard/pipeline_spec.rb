@@ -26,7 +26,7 @@ RSpec.describe Wild::AdminTools::Guard::Pipeline do
     flag_adapter.seed_flag("my_flag")
   end
 
-  after { pipeline.two_phase.nonce_manager.store.stop_sweep! }
+  after { nonce_store.stop_sweep! }
 
   describe "#call" do
     context "when action is a read" do
@@ -78,4 +78,43 @@ RSpec.describe Wild::AdminTools::Guard::Pipeline do
       end
     end
   end
+
+  # rubocop:disable RSpec/MultipleMemoizedHelpers
+  describe "when a policy action omits rate_limit and blast_radius_cap (finding f-l10-6)" do
+    let(:sparse_pipeline) do
+      # sparse_action (PolicyFixtures) omits rate_limit / blast_radius_cap /
+      # nonce_ttl_seconds so it must inherit all three from `defaults`.
+      sparse_config = sparse_policy_config
+      fake_executor = Class.new do
+        def action_names
+          ["purge_all_jobs"]
+        end
+
+        def preview(action_name, _params)
+          Wild::AdminTools::Result.new(
+            status: :preview, action: action_name, operation: "mutate_destructive",
+            data: { estimated_affected: 3 }
+          )
+        end
+
+        def execute(action_name, _params)
+          Wild::AdminTools::Result.new(status: :success, action: action_name, operation: "mutate_destructive")
+        end
+      end.new
+      described_class.new(policy_config: sparse_config).tap { |p| p.register_executor(fake_executor) }
+    end
+
+    after { nonce_store(sparse_pipeline).stop_sweep! }
+
+    it "does not crash the rate limiter or blast radius enforcer" do
+      expect { sparse_pipeline.call("purge_all_jobs", {}, "operator-defaults") }.not_to raise_error
+    end
+
+    it "enforces the inherited default blast_radius_cap instead of always passing" do
+      result = sparse_pipeline.call("purge_all_jobs", {}, "operator-defaults")
+      expect(result.status).to eq(:denied)
+      expect(result.metadata[:reason]).to eq("blast_radius_exceeded")
+    end
+  end
+  # rubocop:enable RSpec/MultipleMemoizedHelpers
 end

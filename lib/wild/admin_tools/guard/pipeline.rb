@@ -14,8 +14,6 @@ module Wild
           @executors = executors
         end
 
-        attr_reader :two_phase
-
         def call(action_name, params, caller_id, nonce: nil)
           catch(:result) { process(action_name, params, caller_id, nonce) }
         end
@@ -26,6 +24,19 @@ module Wild
 
         private
 
+        # @two_phase has no reader, public or private: TwoPhaseFlow#confirm_and_execute
+        # mutates state directly and must only ever be reached through #process
+        # below, which enforces the allowlist, param validation, rate limit, and
+        # blast-radius checks first (finding f-l10-4, review wave 2026-08-25).
+        # See lib/wild/admin_tools.rb's header for the trust boundary this
+        # protects: in-process code that reaches @two_phase or an executor
+        # directly (bypassing #call) is trusted code running inside this gem's
+        # own process, not an external caller: the guard chain's job is to
+        # gate the PUBLIC surface (#call / AuditedPipeline#call / ToolHandler),
+        # not to defend against code that already runs with this object's
+        # privileges. Specs reach it via instance_variable_get(:@two_phase)
+        # (see spec/support/wild_admin_tools/safety_helpers.rb#nonce_store),
+        # never via a reader (security-review follow-up on f-l10-4, PR #73).
         def process(action_name, params, caller_id, nonce)
           config = check_allowlist!(action_name)
           validated = check_params!(action_name, params, config)

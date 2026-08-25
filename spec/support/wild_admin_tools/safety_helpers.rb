@@ -27,8 +27,15 @@ module Wild
           Wild::AdminTools::Server::Tools.const_get(name)
         end
 
-        def nonce_store
-          pipeline.instance_variable_get(:@audited_pipeline).two_phase.nonce_manager.store
+        # `target` defaults to the example group's `pipeline` let, but can be
+        # any Guard::Pipeline or object that wraps one (AuditedPipeline,
+        # AuthenticatedPipeline, ...) so every spec reaches the nonce store
+        # through this one helper instead of re-inlining the ivar chain
+        # (pipeline.rb has no #two_phase reader at all, it is dead in lib,
+        # only specs ever needed it: security-review follow-up on f-l10-6,
+        # PR #73).
+        def nonce_store(target = pipeline)
+          two_phase_flow(target).nonce_manager.store
         end
 
         def expire_nonce!(nonce)
@@ -77,6 +84,18 @@ module Wild
         end
 
         private
+
+        # Reaches Guard::Pipeline's @two_phase ivar directly (no reader
+        # exists in lib; see pipeline.rb), unwrapping AuditedPipeline's
+        # @pipeline or AuthenticatedPipeline's @audited_pipeline as needed.
+        def two_phase_flow(candidate)
+          return candidate.instance_variable_get(:@two_phase) if candidate.is_a?(Wild::AdminTools::Guard::Pipeline)
+
+          inner = candidate.instance_variable_get(:@pipeline) || candidate.instance_variable_get(:@audited_pipeline)
+          raise "cannot locate Guard::Pipeline from #{candidate.class}" if inner.nil?
+
+          two_phase_flow(inner)
+        end
 
         def job_id_spec
           { "name" => "job_id", "type" => "string",

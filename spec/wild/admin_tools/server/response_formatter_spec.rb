@@ -106,6 +106,80 @@ RSpec.describe Wild::AdminTools::Server::ResponseFormatter do
       end
     end
 
+    context "with a denied result carrying a nonce internal_reason (finding f-l10-5)" do
+      # Security Decision 8 (guard/nonce_manager.rb): clients get only the
+      # opaque :reason. internal_reason discriminates not_found / expired /
+      # already_used / mismatch and must stay server-side (audit-only).
+      %w[nonce_not_found nonce_expired nonce_already_used nonce_parameter_mismatch].each do |internal|
+        it "never leaks internal_reason (#{internal}) into the client response" do
+          result = Wild::AdminTools::Result.new(
+            status: :denied,
+            action: "retry_job",
+            operation: "unknown",
+            metadata: { reason: "nonce_invalid", internal_reason: internal }
+          )
+
+          body = described_class.format(result).structured_content
+
+          expect(body[:reason]).to eq("nonce_invalid")
+          expect(body).not_to have_key(:internal_reason)
+        end
+      end
+
+      it "produces an identical, opaque body across every nonce denial subtype" do
+        bodies = %w[nonce_not_found nonce_expired nonce_already_used nonce_parameter_mismatch].map do |internal|
+          result = Wild::AdminTools::Result.new(
+            status: :denied,
+            action: "retry_job",
+            operation: "unknown",
+            metadata: { reason: "nonce_invalid", internal_reason: internal }
+          )
+          described_class.format(result).structured_content
+        end
+
+        expect(bodies.uniq.size).to eq(1)
+      end
+    end
+
+    context "with a success result whose metadata carries an audit-only key (f-l10-6 follow-up)" do
+      # Result::AUDIT_ONLY_METADATA_KEYS is stripped from every status, not
+      # just :denied, so an audit-only key can never leak regardless of which
+      # result shape it ends up attached to.
+      let(:result) do
+        Wild::AdminTools::Result.new(
+          status: :success,
+          action: "inspect_job",
+          operation: "read",
+          data: { job_id: "j1" },
+          metadata: { duration_ms: 1.5, internal_reason: "should_never_leak" }
+        )
+      end
+
+      it "strips the audit-only key from success metadata" do
+        body = described_class.format(result).structured_content
+        expect(body[:metadata]).not_to have_key(:internal_reason)
+        expect(body[:metadata][:duration_ms]).to eq(1.5)
+      end
+    end
+
+    context "with a preview result whose metadata carries an audit-only key (f-l10-6 follow-up)" do
+      let(:result) do
+        Wild::AdminTools::Result.new(
+          status: :preview,
+          action: "retry_job",
+          operation: "mutate",
+          data: { will_retry: true },
+          metadata: { nonce: "wnc_abc123", internal_reason: "should_never_leak" }
+        )
+      end
+
+      it "strips the audit-only key from preview metadata" do
+        body = described_class.format(result).structured_content
+        expect(body[:metadata]).not_to have_key(:internal_reason)
+        expect(body[:metadata][:nonce]).to eq("wnc_abc123")
+      end
+    end
+
     context "with an error result" do
       let(:result) do
         Wild::AdminTools::Result.new(
