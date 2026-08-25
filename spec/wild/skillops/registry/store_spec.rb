@@ -79,19 +79,46 @@ RSpec.describe Wild::Skillops::Registry::Store do
   end
 
   describe "class-level documentation truth (review wave f-l07-1 / f-l07-2)" do
+    # Predicate under test: a comment block is honest about concurrency
+    # guarantees if every sentence mentioning atomicity/durability/thread-
+    # safety is a *disclaimer* ("no", "not", "never" in that same sentence),
+    # never a bare positive claim ("guarantees atomic...", "provides durable
+    # writes"). This is deliberately stricter than a single not-match check:
+    # it catches a re-asserted lie placed anywhere in the block, not just
+    # the exact phrasing that was removed.
+    def dishonest_sentences(text)
+      # Split on sentence-ending punctuation followed by whitespace; keep it
+      # simple since the source is our own prose, not free-form input.
+      sentences = text.split(/(?<=[.:])\s+/)
+      sentences.select do |sentence|
+        sentence.match?(/atomic|durab|thread.?safe/i) &&
+          !sentence.match?(/\bno\b|\bnot\b|\bnever\b/i)
+      end
+    end
+
     let(:class_comment) do
-      source_file = described_class.instance_method(:add).source_location.first
+      source_file, = Object.const_source_location("Wild::Skillops::Registry::Store")
       lines = File.readlines(source_file)
       class_line = lines.index { |l| l.include?("class Store") }
-      lines[0...class_line].select { |l| l.strip.start_with?("#") }.join
+      comment_lines = lines[0...class_line].reverse.take_while { |l| l.strip.start_with?("#") }.reverse
+      comment_lines.map { |l| l.strip.sub(/\A#\s?/, "") }.join(" ")
     end
 
     it "no longer claims Store provides atomic read/write access" do
       expect(class_comment).not_to match(/provides? atomic/i)
     end
 
-    it "states the actual guarantee: no atomicity/durability beyond plain Hash semantics" do
-      expect(class_comment).to match(/no.+(atomicity|durability|thread-safety)/i)
+    it "states the actual guarantee: no atomicity, durability, or thread-safety guarantees" do
+      expect(class_comment).to match(/no atomicity, durability, or thread-safety guarantees/i)
+    end
+
+    it "contains no undisclaimed positive concurrency-safety claim anywhere in the block" do
+      expect(dishonest_sentences(class_comment)).to be_empty
+    end
+
+    it "the dishonest-sentence predicate actually catches a re-asserted lie (negative fixture)" do
+      lie = "This store guarantees atomic read/write access and provides thread-safe durability."
+      expect(dishonest_sentences(lie)).not_to be_empty
     end
   end
 end

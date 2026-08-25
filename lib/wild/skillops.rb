@@ -7,10 +7,11 @@
 # Cunningham, Armstrong, DHH, Hickey, Beck, Fowler concur), this namespace
 # is **internal by default** — `Wild.config.skillops.enabled` defaults to
 # `false` (per PR-B). External consumers wait for an ADR-0002 path; until
-# then, treat this namespace's public API as unstable. The F5 documentation
-# downgrade itself (removing "atomic"/"durable" claims from the README's
-# wording) lives in wild-rvv.8.1 — a Role 6 behavior change separate from
-# this structure-only move.
+# then, treat this namespace's public API as unstable. For the actual
+# atomicity/durability/thread-safety guarantee (and lack thereof), see
+# `Registry::Store`'s class comment (`lib/wild/skillops/registry/store.rb`)
+# and `package.yml` (`lib/wild/skillops/package.yml`) — those two are the
+# single source of truth for the F5 wording; this header does not restate it.
 #
 # Code moved from the old wild-skillops-registry gem in Role 5 PR-5.
 

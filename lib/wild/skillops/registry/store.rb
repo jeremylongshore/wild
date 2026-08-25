@@ -5,13 +5,30 @@ module Wild
     module Registry
       # In-memory store for registry entries.
       #
-      # Enforces capacity limits. Single-process, non-concurrent: it makes no
-      # atomicity, durability, or thread-safety guarantees beyond whatever
-      # Ruby's Hash already provides. #add is a plain check-then-set (read
-      # @entries.size, then write) with no Mutex/Monitor guarding it, so two
-      # callers racing near max_skills can both pass the capacity check
-      # before either mutation lands. Per council F5 / package.yml: "NO
-      # atomicity, NO durability claims."
+      # Enforces capacity limits. This class provides no atomicity, durability,
+      # or thread-safety guarantees of its own: it is the CALLER's obligation
+      # to serialize access. `000-docs/005` (the engine spec) scopes that
+      # obligation explicitly to a single-process, non-concurrent caller; a
+      # threaded Puma worker calling into this store from more than one
+      # thread is out of the supported contract. Ruby's own `Hash` carries no
+      # thread-safety contract either: on CRuby the GVL makes individual
+      # Hash operations *look* safe, but that is an implementation detail,
+      # not a promise, and JRuby's Hash raises `ConcurrentModificationError`
+      # under the same access pattern.
+      #
+      # The real check-then-set (TOCTOU) races live one level up, in the
+      # callers that read this store and write back a derived value without
+      # a lock: `Registrar#register` (`include?` then `add`),
+      # `Registrar#update` (`fetch`, rebuild, `add`), `Health::Tracker`
+      # (`fetch`, rebuild, `add`), `Governance::OwnershipResolver` (`fetch`,
+      # rebuild, `add`), and `Discovery::TagIndex#index`/`#reindex` (`<<
+      # unless include?`). `Store#add` itself is just the last link in each
+      # of those chains, not the sole race. Per council F5 / package.yml:
+      # "NO atomicity, NO durability claims."
+      #
+      # Monitor-vs-document is an open owner decision; see the bead "Decide
+      # whether the skillops registry store gets a Monitor or stays
+      # documented as caller-synchronized."
       class Store
         def initialize
           @entries = {}
