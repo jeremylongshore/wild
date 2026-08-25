@@ -38,38 +38,45 @@ module Wild
 
           private
 
+          # Both purge paths route through JsonLinesStore#compact so the
+          # read-modify-write happens under the store's own @mutex (finding
+          # f-l02-1) and the rewrite is an atomic, fsync'd rename rather
+          # than an in-place truncate (finding f-l02-2). A failure here
+          # (disk full mid-rewrite, a rename that cannot land) is not
+          # swallowed: #compact re-raises, and it propagates out of
+          # purge_before/remove_oldest_until_within_limit/purge_expired/
+          # purge_oversized/purge_all so a caller (a scheduler, a rake task)
+          # sees a real exception instead of a purge that silently returned
+          # 0 while having actually failed.
           def purge_before(cutoff)
-            kept_lines = []
-            removed_count = 0
-
-            File.foreach(@store.path) do |line|
-              data = safe_parse(line)
-              if data && data[:received_at] && data[:received_at] < cutoff
-                removed_count += 1
-              else
-                kept_lines << line
+            @store.compact do |lines|
+              lines.reject do |line|
+                data = safe_parse(line)
+                data && data[:received_at] && data[:received_at] < cutoff
               end
             end
-
-            return 0 if removed_count.zero?
-
-            File.write(@store.path, kept_lines.join)
-            removed_count
           end
 
+          # One pass, running subtraction: computes the kept size once and
+          # walks forward decrementing it, rather than recomputing
+          # total_size(kept) on every shift (O(n * k) under the store's
+          # @mutex for k removed lines out of n). No intermediate `dup`
+          # either; the removal count alone is enough to slice the kept
+          # tail out of the original array.
           def remove_oldest_until_within_limit
-            lines = File.readlines(@store.path)
-            removed_count = 0
+            @store.compact do |lines|
+              remaining = total_size(lines)
+              drop_count = 0
 
-            while total_size(lines) > @max_size_bytes && !lines.empty?
-              lines.shift
-              removed_count += 1
+              lines.each do |line|
+                break if remaining <= @max_size_bytes
+
+                remaining -= line.bytesize
+                drop_count += 1
+              end
+
+              lines[drop_count..]
             end
-
-            return 0 if removed_count.zero?
-
-            File.write(@store.path, lines.join)
-            removed_count
           end
 
           def total_size(lines)
