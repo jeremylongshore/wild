@@ -353,6 +353,67 @@ section splits into a separate file.
   refactor (behavior-preserving move).
 - **NOT in this PR** (deferred, `wild-rvv.5` children): F7 (`5.1`), F8 (`5.2`),
   MIN-Kleppmann (`5.3`), F6 export audit (`5.4`).
+- **`Redactor#redact_turn` now scrubs `turn.metadata`, not just `turn.content`**
+  (review wave, finding f-l03-1). Raw `tool_input`/`tool_output` copied
+  verbatim by `ClaudeCodeAdapter` was reaching `Export::JsonExporter` output
+  unredacted, so a secret passed as a tool argument survived into exported
+  telemetry. New `Redactor#redact_metadata` walks Hash/Array structures
+  recursively and redacts String leaves with the same built-in and custom
+  `ContentFilter` patterns used for content; keys and non-String values pass
+  through untouched. Fixed at the Redactor (the privacy boundary) rather than
+  in each adapter, so every ingestion source is covered by one scrub pass
+  instead of requiring per-adapter redaction. Advances bead "F7: Add
+  boundary normalization wherever data crosses namespaces". Does not address
+  the separate JSON-quoted `api_key` pattern gap (f-l03-2), which lands as
+  its own PR.
+- **Metadata redaction hardened: key-aware, secrets-only, class-preserving,
+  bounded, and single-pass** (paired-verifier follow-up on the item above,
+  f-l03-1). A Hash key matching a secret-name pattern (`api_key`,
+  `aws_secret`, `Authorization`, etc., normalized for case/separators) now
+  redacts its whole value regardless of shape, closing the gap where
+  `{"api_key" => "sk_live_..."}` exported verbatim because the value itself
+  matched no built-in pattern. Metadata leaf scrubbing is now secrets-only
+  (API key, AWS key/secret, GitHub token, bearer token, custom patterns);
+  it no longer applies the EMAIL/IP/ABSOLUTE_PATH/file-content patterns
+  `#redact_content` uses, which were mangling structural metadata like
+  `method: "tools/call"`, `tool_name`, `file_path`, and `git@`-style remote
+  URLs. `redact_transcript` now scrubs `transcript.metadata` with the same
+  rules (it previously passed it through unredacted while stamping
+  `redacted: true`). The rebuild preserves the source Hash's class, so
+  `ActiveSupport::HashWithIndifferentAccess` metadata keeps working after
+  redaction. Recursion is capped at 64 levels with cycle detection, raising
+  `PrivacyError` instead of `SystemStackError` on a malformed or
+  self-referential payload. `Pipeline.run_pipeline` no longer redacts each
+  turn once during normalization and again inside `redact_transcript`; turns
+  are redacted exactly once, at export. New `Privacy::MetadataRedactor`
+  holds this logic (split out of `Redactor` to stay under
+  `Metrics/ClassLength`). Advances bead "F7: Add boundary normalization
+  wherever data crosses namespaces".
+- **HIGH regression fixed: derived `Intent#description` leaked secrets past
+  the redaction boundary, and `#redact_content` was not idempotent against
+  its own marker** (security-review follow-up on the item above, f-l03-1).
+  Moving `IntentDetector`/`ToolExtractor` upstream of redaction (the fix
+  above) left `Redactor#redact_transcript` passing `transcript.intents`
+  through untouched: `IntentDetector#build_description` copies up to an
+  80-char verbatim slice of raw turn content into `Intent#description`, so a
+  secret in a turn's text (an API key, an IP address) survived into
+  `Export::JsonExporter` output even though the turn itself was correctly
+  redacted, with `metadata.redacted` reporting `true`. `redact_transcript`
+  now maps `transcript.intents` through a new `Redactor#redact_intent`,
+  which redacts `description` via `#redact_content` and re-emits an
+  `Intent` with `confidence`/`source_turn_index` unchanged; keeps
+  `redact_transcript` the single, complete boundary that touches every
+  exported field. `tool_references` are left as-is: every extraction
+  pattern in `ToolExtractor` constrains captured names to
+  `[a-z_][a-z0-9_-]*`, so a name can't carry a secret shape (asserted by a
+  new spec, not a code change). Separately, `#redact_content` is now
+  idempotent against a redaction marker that happens to match one of its
+  own patterns (e.g. an email-shaped marker like
+  `<redacted@wild.local>`): it splits the input on the marker string first
+  and only pattern-matches the segments between marker occurrences, so a
+  future accidental double pass, or any marker shape, can no longer corrupt
+  already-redacted text by re-wrapping it. Advances bead "F7: Add boundary
+  normalization wherever data crosses namespaces".
 
 ### Wild::Telemetry::Analysis
 
