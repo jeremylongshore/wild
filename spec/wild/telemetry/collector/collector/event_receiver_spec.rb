@@ -88,12 +88,13 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
     end
   end
 
-  describe "fire-and-forget: store raises an exception" do
+  describe "fire-and-forget: store raises a StorageError" do
     subject(:receiver) { described_class.new(store: failing_store) }
 
     let(:failing_store) do
       store = instance_double(Wild::Telemetry::Collector::Store::MemoryStore)
-      allow(store).to receive(:append).and_raise(RuntimeError, "disk full")
+      allow(store).to receive(:append)
+        .and_raise(Wild::Telemetry::Collector::StorageError, "append failed: Errno::ENOSPC: disk full")
       store
     end
 
@@ -116,13 +117,13 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
       expect { receiver.receive(event) }.not_to change(receiver, :storage_failure_count)
     end
 
-    it "logs the storage failure to Wild.config.audit_logger when one is configured" do
-      logger = instance_double(Logger, warn: nil)
+    it "logs the storage failure to Wild.config.audit_logger at :error (finding f-l02-6)" do
+      logger = instance_double(Logger, error: nil)
       Wild.configure { |c| c.audit_logger = logger }
 
       receiver.receive(valid_action_completed_event)
 
-      expect(logger).to have_received(:warn).with(a_string_matching(/disk full/))
+      expect(logger).to have_received(:error).with(a_string_matching(/disk full/))
     end
 
     it "does not raise when no audit_logger is configured" do
@@ -132,9 +133,46 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
 
     it "does not raise when the configured audit_logger itself raises" do
       broken_logger = instance_double(Logger)
-      allow(broken_logger).to receive(:warn).and_raise(RuntimeError, "log pipe closed")
+      allow(broken_logger).to receive(:error).and_raise(RuntimeError, "log pipe closed")
       Wild.configure { |c| c.audit_logger = broken_logger }
 
+      expect { receiver.receive(valid_action_completed_event) }.not_to raise_error
+    end
+  end
+
+  describe "fire-and-forget: store raises a non-StorageError StandardError (finding f-l02-6)" do
+    subject(:receiver) { described_class.new(store: buggy_store) }
+
+    let(:buggy_store) do
+      store = instance_double(Wild::Telemetry::Collector::Store::MemoryStore)
+      allow(store).to receive(:append).and_raise(NoMethodError, "undefined method `to_h' for a custom adapter bug")
+      store
+    end
+
+    it "returns nil when the store raises" do
+      result = receiver.receive(valid_action_completed_event)
+      expect(result).to be_nil
+    end
+
+    it "does not propagate the store exception to the caller" do
+      expect { receiver.receive(valid_action_completed_event) }.not_to raise_error
+    end
+
+    it "does not count it as a storage failure" do
+      expect { receiver.receive(valid_action_completed_event) }.not_to change(receiver, :storage_failure_count)
+    end
+
+    it "logs it as an internal error, distinct from a storage failure, at :error" do
+      logger = instance_double(Logger, error: nil)
+      Wild.configure { |c| c.audit_logger = logger }
+
+      receiver.receive(valid_action_completed_event)
+
+      expect(logger).to have_received(:error).with(a_string_matching(/unexpected internal error/))
+    end
+
+    it "does not raise when no audit_logger is configured" do
+      expect(Wild.config.audit_logger).to be_nil
       expect { receiver.receive(valid_action_completed_event) }.not_to raise_error
     end
   end

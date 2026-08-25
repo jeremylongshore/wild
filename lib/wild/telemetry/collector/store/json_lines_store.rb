@@ -2,11 +2,16 @@
 
 require "json"
 require "fileutils"
+require "active_support/core_ext/file/atomic"
 
 module Wild
   module Telemetry
     module Collector
       module Store
+        # rubocop:disable Metrics/ClassLength -- grew past the default budget adding StorageError
+        # wrapping (f-l02-6) and File.atomic_write's crash-safety/permission-preservation and
+        # cross-process-locking documentation (f-l02-1, f-l02-2) on top of the existing store API;
+        # no single method here is complex.
         class JsonLinesStore < Base
           attr_reader :path
 
@@ -23,6 +28,8 @@ module Wild
               File.open(@path, "a") { |f| f.puts(line) }
             end
             envelope
+          rescue SystemCallError, IOError => e
+            raise StorageError, "append failed: #{e.class}: #{e.message}"
           end
 
           def recent(limit: 50)
@@ -72,8 +79,10 @@ module Wild
 
           def clear!
             @mutex.synchronize do
-              File.write(@path, "") if File.exist?(@path)
+              atomic_replace("") if File.exist?(@path)
             end
+          rescue SystemCallError, IOError => e
+            raise StorageError, "clear failed: #{e.class}: #{e.message}"
           end
 
           def size_bytes
@@ -86,17 +95,27 @@ module Wild
 
           # Rewrites the store's file under the same @mutex #append uses, so
           # a rewrite (retention purge, size trim) can never race a
-          # concurrent #append and lose it (finding f-l02-1: an untracked
-          # 2000-append / 300-purge race dropped 425 events before this
-          # existed). Yields the current lines (raw strings, newline
-          # included) and expects the array to keep back; returns the count
-          # of lines removed, or 0 if the file does not exist or nothing was
-          # removed.
+          # concurrent #append and lose it (finding f-l02-1). Yields the
+          # current lines (raw strings, newline included) and expects the
+          # array to keep back; returns the count of lines removed, or 0 if
+          # the file does not exist or nothing was removed.
           #
-          # The rewrite itself goes through a temp file in the same
-          # directory, fsync'd before an atomic File.rename over @path
-          # (finding f-l02-2): a crash between the write and the rename
-          # leaves the original file untouched, never truncated mid-write.
+          # The rewrite goes through ActiveSupport's File.atomic_write
+          # (finding f-l02-2): a same-directory Tempfile, fsync'd before an
+          # atomic File.rename over @path, so a crash between the write and
+          # the rename leaves the original file untouched. atomic_write also
+          # chown/chmods the replacement to match @path's original
+          # uid/gid/mode, so a 0600 file stays 0600 (hand-rolling
+          # `File.open(tmp, "wb")` picks up umask-default permissions and the
+          # calling uid instead).
+          #
+          # The lock this rewrite runs under (@mutex, shared with #append) is
+          # process-local: it does nothing for two separate processes (or
+          # two separate JsonLinesStore instances) writing the same file
+          # concurrently, there is no flock, and none is added here.
+          # Cross-process purge/append safety on a shared file is a
+          # follow-up (bead: "Add cross-process file locking to
+          # JsonLinesStore for multi-process purge/append safety").
           def compact
             @mutex.synchronize do
               return 0 unless File.exist?(@path)
@@ -109,6 +128,8 @@ module Wild
               atomic_replace(kept_lines.join)
               removed_count
             end
+          rescue SystemCallError, IOError => e
+            raise StorageError, "compact failed: #{e.class}: #{e.message}"
           end
 
           private
@@ -118,16 +139,42 @@ module Wild
           end
 
           def atomic_replace(content)
-            tmp_path = "#{@path}.tmp-#{Process.pid}-#{Thread.current.object_id}"
-            File.open(tmp_path, "wb") do |f|
+            File.atomic_write(@path) do |f|
               f.write(content)
               f.flush
               f.fsync
             end
-            File.rename(tmp_path, @path)
+            fsync_containing_directory
           rescue StandardError
-            File.delete(tmp_path) if tmp_path && File.exist?(tmp_path)
+            cleanup_leftover_atomic_write_tempfiles
             raise
+          end
+
+          # Best-effort durability: the file itself is already fsync'd and
+          # atomically renamed into place by File.atomic_write above, so a
+          # directory entry that never made it to disk (some overlay
+          # filesystems, or a platform that refuses to open/fsync a
+          # directory at all) is not correctness-critical, just a smaller
+          # durability guarantee than the common case gets.
+          def fsync_containing_directory
+            File.open(File.dirname(@path), &:fsync)
+          rescue SystemCallError, NotImplementedError
+            nil
+          end
+
+          # File.atomic_write's Tempfile is not unlinked when the block
+          # raises (only Ruby's Tempfile finalizer will eventually clean it
+          # up, at GC or process exit) so a rename failure would otherwise
+          # leak a stray `.<basename><random>` file in @path's directory on
+          # every failed compact/clear!. Best-effort: if the leftover is
+          # already gone (a concurrent cleanup, or it never got created),
+          # there is nothing left to do.
+          def cleanup_leftover_atomic_write_tempfiles
+            Dir.glob(File.join(File.dirname(@path), ".#{File.basename(@path)}*")).each do |leftover|
+              File.delete(leftover)
+            end
+          rescue Errno::ENOENT
+            nil
           end
 
           def parse_envelope(line)
@@ -145,6 +192,7 @@ module Wild
             true
           end
         end
+        # rubocop:enable Metrics/ClassLength
       end
     end
   end

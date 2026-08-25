@@ -288,42 +288,81 @@ RSpec.describe Wild::Telemetry::Collector::Store::JsonLinesStore do
         original_content = File.read(store_path)
         allow(File).to receive(:rename).and_raise(Errno::ENOSPC, "no space left on device")
 
-        expect { store.compact { |_lines| [] } }.to raise_error(Errno::ENOSPC)
+        expect { store.compact { |_lines| [] } }.to raise_error(Wild::Telemetry::Collector::StorageError)
         expect(File.read(store_path)).to eq(original_content)
       end
 
-      it "deletes the temp file it wrote before re-raising" do
+      it "wraps the rename failure in a StorageError with the original error as its cause (finding f-l02-6)" do
         allow(File).to receive(:rename).and_raise(Errno::ENOSPC, "no space left on device")
 
-        expect { store.compact { |_lines| [] } }.to raise_error(Errno::ENOSPC)
-        leftovers = Dir.glob(File.join(tmpdir, "*.tmp-*"))
+        error = nil
+        begin
+          store.compact { |_lines| [] }
+        rescue Wild::Telemetry::Collector::StorageError => e
+          error = e
+        end
+
+        expect(error).not_to be_nil
+        expect(error.message).to include("no space left on device")
+        expect(error.cause).to be_a(Errno::ENOSPC)
+      end
+
+      it "deletes the Tempfile it wrote before re-raising (finding f-l02-6)" do
+        allow(File).to receive(:rename).and_raise(Errno::ENOSPC, "no space left on device")
+
+        expect { store.compact { |_lines| [] } }.to raise_error(Wild::Telemetry::Collector::StorageError)
+        # File.atomic_write names its Tempfile ".<basename><random>" in the
+        # same directory as the target file.
+        leftovers = Dir.glob(File.join(tmpdir, ".events.jsonl*"))
         expect(leftovers).to be_empty
+      end
+
+      it "preserves the original file's permission mode after a successful compact (finding f-l02-6)" do
+        store.append(build_envelope(timestamp: "2026-03-19T10:00:01.000Z"))
+        File.chmod(0o600, store_path)
+
+        result = store.compact { |lines| lines.drop(1) }
+
+        expect(result).to eq(1)
+        expect(format("%o", File.stat(store_path).mode & 0o777)).to eq("600")
       end
     end
 
     describe "concurrency safety (finding f-l02-1)" do
-      it "does not lose events written by concurrent appends while a compact runs" do
-        # Fails on main: RetentionManager (and any other #compact-shaped
-        # rewrite) reads/writes @store.path directly, outside @mutex, so an
-        # append landing mid-purge is built into a stale snapshot and lost.
-        store.append(build_envelope(timestamp: "2026-03-19T09:00:00.000Z"))
+      def minute_second_timestamp(hour, index)
+        format("2026-03-19T%<hour>02d:%<min>02d:%<sec>02d.000Z", hour: hour, min: index / 60, sec: index % 60)
+      end
 
-        appender = Thread.new do
-          50.times do |i|
-            ts = format("2026-03-19T10:%02d:00.000Z", i)
-            store.append(build_envelope(timestamp: ts))
-          end
+      def append_indexed(count, hour:, action_prefix:)
+        count.times do |i|
+          envelope = build_envelope(timestamp: minute_second_timestamp(hour, i), action: "#{action_prefix}_#{i}")
+          store.append(envelope)
         end
+      end
 
+      # Fails on main: RetentionManager (and any other #compact-shaped
+      # rewrite) reads/writes @store.path directly, outside @mutex, so an
+      # append landing mid-purge is built into a stale snapshot and lost.
+      #
+      # The compact block below has to actually drop lines (not just return
+      # its input unchanged): #compact short-circuits to a no-op (`return 0
+      # if removed_count.zero?`) before ever touching atomic_replace, so an
+      # identity block never exercises the rewrite path this test exists to
+      # race against.
+      it "does not lose events written by concurrent appends while a real rewrite runs (finding f-l02-6)" do
+        survivor_count = 200
+        marker_count = 200
+
+        survivors = Thread.new { append_indexed(survivor_count, hour: 10, action_prefix: "survivor") }
+        markers = Thread.new { append_indexed(marker_count, hour: 9, action_prefix: "marker") }
         compactor = Thread.new do
-          10.times do
-            store.compact { |lines| lines } # no-op rewrite, still takes the lock + does the I/O
-          end
+          10.times { store.compact { |lines| lines.reject { |line| line.include?('"action":"marker') } } }
         end
 
-        [appender, compactor].each(&:join)
+        [survivors, markers, compactor].each(&:join)
 
-        expect(store.count).to eq(51)
+        surviving_actions = store.query.map(&:action).select { |a| a.start_with?("survivor_") }
+        expect(surviving_actions.uniq.size).to eq(survivor_count)
       end
     end
   end

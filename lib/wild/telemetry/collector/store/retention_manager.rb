@@ -57,11 +57,25 @@ module Wild
             end
           end
 
+          # One pass, running subtraction: computes the kept size once and
+          # walks forward decrementing it, rather than recomputing
+          # total_size(kept) on every shift (O(n * k) under the store's
+          # @mutex for k removed lines out of n). No intermediate `dup`
+          # either; the removal count alone is enough to slice the kept
+          # tail out of the original array.
           def remove_oldest_until_within_limit
             @store.compact do |lines|
-              kept = lines.dup
-              kept.shift while total_size(kept) > @max_size_bytes && !kept.empty?
-              kept
+              remaining = total_size(lines)
+              drop_count = 0
+
+              lines.each do |line|
+                break if remaining <= @max_size_bytes
+
+                remaining -= line.bytesize
+                drop_count += 1
+              end
+
+              lines[drop_count..]
             end
           end
 

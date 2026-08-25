@@ -204,36 +204,30 @@ RSpec.describe Wild::Telemetry::Collector::Store::RetentionManager do
     # actually has something expired to remove (`return 0 if
     # removed_count.zero?`), so the race needs a steady stream of
     # already-expired "noise" alongside the fresh events under test, or the
-    # short-circuit means File.write is never even reached. This empirically
-    # loses a measurable slice of the fresh events on main (2000 fresh /
-    # 2000 expired-noise appends racing 300 purge_expired calls); on the
-    # fixed branch both go through JsonLinesStore#compact under the same
-    # @mutex #append uses, so nothing is ever lost, deterministically, every
-    # run.
+    # short-circuit means File.write is never even reached. On the fixed
+    # branch both go through JsonLinesStore#compact under the same @mutex
+    # #append uses, so nothing is ever lost, deterministically, every run.
+    # (finding f-l02-6: trimmed from 2000 fresh / 2000 expired-noise
+    # appends racing 300 purge_expired calls to 400 / 30, which still
+    # exercises the lock deterministically but at a fraction of the wall
+    # time, and reuses the build_envelope fixture instead of a hand-rolled
+    # envelope constructor.)
     let(:manager) { described_class.new(store: store, retention_days: 90) }
-    let(:fresh_count) { 2000 }
-    let(:purge_count) { 300 }
+    let(:fresh_count) { 400 }
+    let(:purge_count) { 30 }
 
-    def envelope_at(seconds_ago, action:)
+    def append_at(seconds_ago, action:)
       ts = (Time.now.utc - seconds_ago).iso8601(6)
-      Wild::Telemetry::Collector::Schema::EventEnvelope.new(
-        event_type: "action.completed",
-        timestamp: ts,
-        caller_id: "test",
-        action: action,
-        outcome: "success",
-        received_at: ts
-      )
+      store.append(build_envelope(timestamp: ts, received_at: ts, action: action))
+    end
+
+    def append_noise_and_survivor(index)
+      append_at((120 * 86_400) + index, action: "expired_noise_#{index}")
+      append_at(86_400 + index, action: "fresh_survivor_#{index}")
     end
 
     it "retains every fresh appended event even while purge_expired races it against expired noise" do
-      appender = Thread.new do
-        fresh_count.times do |i|
-          store.append(envelope_at((120 * 86_400) - i, action: "expired_noise_#{i}"))
-          store.append(envelope_at(86_400 - i, action: "fresh_survivor_#{i}"))
-        end
-      end
-
+      appender = Thread.new { fresh_count.times { |i| append_noise_and_survivor(i) } }
       purger = Thread.new { purge_count.times { manager.purge_expired } }
 
       [appender, purger].each(&:join)
