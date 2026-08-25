@@ -80,7 +80,7 @@ RSpec.describe Wild::Telemetry::Pipeline::Privacy::Redactor do
       expect(result.content).to include("[REDACTED]")
     end
 
-    it "preserves role, timestamp, and metadata" do
+    it "preserves role, timestamp, and non-sensitive metadata" do
       ts = Time.utc(2026, 1, 1)
       turn = make_turn(role: :assistant, content: "hello", timestamp: ts, metadata: { k: "v" })
       result = redactor.redact_turn(turn)
@@ -89,9 +89,56 @@ RSpec.describe Wild::Telemetry::Pipeline::Privacy::Redactor do
       expect(result.metadata).to eq({ k: "v" })
     end
 
+    it "redacts secrets nested inside turn metadata (f-l03-1)" do
+      turn = make_turn(
+        content: "exec",
+        metadata: { tool_name: "exec", tool_input: { "api_key" => "AKIAIOSFODNN7EXAMPLE" } }
+      )
+      result = redactor.redact_turn(turn)
+      expect(result.metadata[:tool_input]["api_key"]).not_to include("AKIAIOSFODNN7EXAMPLE")
+      expect(result.metadata[:tool_input]["api_key"]).to include("[REDACTED]")
+      expect(result.metadata[:tool_name]).to eq("exec")
+    end
+
     it "raises PrivacyError for non-Turn input" do
       expect { redactor.redact_turn("not a turn") }
         .to raise_error(Wild::Telemetry::Pipeline::PrivacyError)
+    end
+  end
+
+  describe "#redact_metadata" do
+    let(:metadata) do
+      {
+        tool_name: "exec",
+        tool_input: {
+          "api_key" => "AKIAIOSFODNN7EXAMPLE",
+          "notes" => ["contact bob@example.com", "not secret"],
+          "count" => 3,
+          "enabled" => true
+        }
+      }
+    end
+    let(:result) { redactor.redact_metadata(metadata) }
+
+    it "scrubs secret strings, including inside arrays" do
+      expect(result[:tool_input]["api_key"]).to include("[REDACTED]")
+      expect(result[:tool_input]["notes"].first).to include("[REDACTED]")
+    end
+
+    it "leaves non-string values and hash keys untouched" do
+      expect(result[:tool_input]["notes"][1]).to eq("not secret")
+      expect(result[:tool_input]["count"]).to eq(3)
+      expect(result[:tool_input]["enabled"]).to be(true)
+      expect(result.keys).to eq(metadata.keys)
+      expect(result[:tool_input].keys).to eq(metadata[:tool_input].keys)
+    end
+
+    it "returns nil for nil metadata" do
+      expect(redactor.redact_metadata(nil)).to be_nil
+    end
+
+    it "returns an empty hash for empty metadata" do
+      expect(redactor.redact_metadata({})).to eq({})
     end
   end
 

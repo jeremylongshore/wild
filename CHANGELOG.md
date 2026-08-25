@@ -353,6 +353,19 @@ section splits into a separate file.
   refactor (behavior-preserving move).
 - **NOT in this PR** (deferred, `wild-rvv.5` children): F7 (`5.1`), F8 (`5.2`),
   MIN-Kleppmann (`5.3`), F6 export audit (`5.4`).
+- **`Redactor#redact_turn` now scrubs `turn.metadata`, not just `turn.content`**
+  (review wave, finding f-l03-1). Raw `tool_input`/`tool_output` copied
+  verbatim by `ClaudeCodeAdapter` was reaching `Export::JsonExporter` output
+  unredacted, so a secret passed as a tool argument survived into exported
+  telemetry. New `Redactor#redact_metadata` walks Hash/Array structures
+  recursively and redacts String leaves with the same built-in and custom
+  `ContentFilter` patterns used for content; keys and non-String values pass
+  through untouched. Fixed at the Redactor (the privacy boundary) rather than
+  in each adapter, so every ingestion source is covered by one scrub pass
+  instead of requiring per-adapter redaction. Advances bead "F7: Add
+  boundary normalization wherever data crosses namespaces". Does not address
+  the separate JSON-quoted `api_key` pattern gap (f-l03-2), which lands as
+  its own PR.
 
 ### Wild::Telemetry::Analysis
 

@@ -25,12 +25,13 @@ module Wild
             raise PrivacyError, "turn must be a Turn" unless turn.is_a?(Models::Turn)
 
             redacted_content = redact_content(turn.content, config: config)
+            redacted_metadata = redact_metadata(turn.metadata, config: config)
 
             Models::Turn.new(
               role: turn.role,
               content: redacted_content,
               timestamp: turn.timestamp,
-              metadata: turn.metadata
+              metadata: redacted_metadata
             )
           end
 
@@ -42,7 +43,31 @@ module Wild
             apply_custom_patterns(result, config)
           end
 
+          # Recursively scrubs string values inside turn metadata (e.g. the raw
+          # tool_input/tool_output hashes ClaudeCodeAdapter copies verbatim). Lives
+          # here, not in the adapters, so every ingestion source is covered by the
+          # same privacy boundary rather than requiring each adapter to redact for
+          # itself. Keys are left untouched; only String leaves are scrubbed;
+          # non-Hash/Array/String values (numbers, booleans, nil, symbols) pass
+          # through unchanged.
+          def redact_metadata(metadata, config: Wild.config.telemetry.pipeline)
+            redact_metadata_value(metadata, config)
+          end
+
           private
+
+          def redact_metadata_value(value, config)
+            case value
+            when String
+              redact_content(value, config: config)
+            when Hash
+              value.each_with_object({}) { |(k, v), h| h[k] = redact_metadata_value(v, config) }
+            when Array
+              value.map { |v| redact_metadata_value(v, config) }
+            else
+              value
+            end
+          end
 
           def apply_built_in_patterns(content, config)
             marker = config.redaction_marker

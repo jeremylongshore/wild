@@ -40,6 +40,23 @@ RSpec.describe "Full pipeline integration" do
       all_refs = transcripts.flat_map(&:tool_references)
       expect(all_refs.map(&:name)).to include("inspect_connection")
     end
+
+    it "scrubs secrets from tool_use metadata end to end (f-l03-1)" do
+      # AWS access key + email shapes, not "api_key=..." JSON, so this isolates
+      # the metadata-redaction fix from the separate JSON-quoted-key pattern gap
+      # (f-l03-2, out of scope for this PR).
+      line = {
+        type: "tool_use",
+        name: "exec",
+        input: { "aws_key" => "AKIAIOSFODNN7EXAMPLE", "contact" => "bob@example.com" }
+      }.to_json
+      transcripts = Wild::Telemetry::Pipeline.process(line, adapter: adapter, source_id: "session-secret")
+      exported = json_exporter.export(transcripts)
+
+      expect(exported).not_to include("AKIAIOSFODNN7EXAMPLE")
+      expect(exported).not_to include("bob@example.com")
+      expect(exported).to include("[REDACTED]")
+    end
   end
 
   describe "MCP log pipeline" do
