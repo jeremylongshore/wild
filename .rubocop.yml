@@ -9,11 +9,19 @@ AllCops:
     - "tmp/**/*"
     - "coverage/**/*"
 
-require:
+plugins:
   - rubocop-rails
   - rubocop-rspec
 
 Style/Documentation:
+  Enabled: false
+
+# New in RuboCop 1.90 (surfaced when Gemfile.lock was committed). It rewrites
+# `disable`/`enable` pairs around a single statement into `disable-next-line`,
+# which is comment-only churn across 42 spec files and is flagged unsafe because
+# `disable-next-line` covers one line, not the multi-line block the pair guards.
+# Disabled deliberately; revisit if the pairs are ever consolidated.
+Style/DirectiveScope:
   Enabled: false
 
 Style/StringLiterals:

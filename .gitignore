@@ -18,8 +18,9 @@ spec/reports/
 tmp/
 log/
 
-# Gemfile.lock — keep for now (engine gem with Rails-app fixture in dummy/)
-# (do NOT uncomment unless removing dummy/ Rails app)
+# Gemfile.lock is COMMITTED for CI reproducibility (review-wave pre-flight,
+# 2026-08-25): an untracked lock let CI resolve newer RuboCop cops than local
+# and turned Lint red on every Dependabot PR. Dependabot bumps the lock.
 
 # Debugger
 .byebug_history
