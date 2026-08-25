@@ -120,6 +120,44 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
+- **Review wave: closed four audit-blind paths in the capability gate**
+  (findings f-l08-1, f-l08-2, f-l08-3, f-l08-4). Advances bead "Move
+  wild-capability-gate into Wild::CapabilityGate and fix the F2 audit-blind
+  path"; does not close it (the fail-closed posture for a dark writer+logger
+  on an ALLOW result is a separate, deliberately deferred decision, tracked by
+  bead "Decide the fail-closed posture for ALLOW results when both the audit
+  writer and logger are dark").
+  - **f-l08-1**: a hostile (non-Hash) `context` argument to `Gate#evaluate` /
+    `Evaluator#evaluate` used to raise `TypeError` inside `Audit::Event#initialize`,
+    get swallowed by `emit_audit`'s rescue, and leave the evaluation's ALLOW/DENY
+    with zero audit lines. New `SafeCoercion#safe_context` coerces defensively
+    (never raises) before event construction, so one bad argument can no longer
+    suppress the audit record for its own decision.
+  - **f-l08-2**: `Audit::SchemaValidator` already raised `Wild::ConfigurationError`
+    when validation was enabled but `json_schemer` (a dev-only dependency) was
+    absent, but `emit_audit`'s blanket `StandardError` rescue caught it anyway,
+    and with `audit_logger` nil by default the whole thing vanished: every
+    evaluation returned ALLOW with zero audit and zero log. `ConfigurationError`
+    is now re-raised alongside `AuditSchemaError`, ordered before the
+    `StandardError` rescue in both `Evaluator#evaluate` and `Gate#evaluate`, so
+    a missing dev dependency fails loudly at first use instead of degrading the
+    gate's audit trail. The `:auto` validation toggle's dev/test-on,
+    production-off semantics are unchanged.
+  - **f-l08-3**: `Gate#evaluate`'s blanket `StandardError` rescue was silently
+    swallowing the `AuditSchemaError` that `Evaluator#evaluate` deliberately
+    re-raises to surface a non-conforming audit event as a developer bug,
+    demoting it to an audit-blind `:evaluation_error` denial. `gate.rb`'s
+    comment, and a `gate_spec.rb` example, both asserted this rescue was
+    unreachable today (false: the re-raise already existed). Added an
+    explicit `rescue AuditSchemaError, ConfigurationError; raise` above the
+    blanket rescue, corrected both the comment and the spec's claim, and added
+    a Gate-level example proving the raise now reaches the caller.
+  - **f-l08-4**: `log_audit_failure` logged to `Wild.config.audit_logger.error`
+    only when a logger was explicitly configured; the default `nil` logger made
+    every audit-writer failure terminally silent while the gate still returned
+    ALLOW/DENY. It now falls back to `Kernel#warn` ($stderr) whenever no usable
+    logger is configured (or the configured one itself raises), so a writer
+    failure is observable out of the box, not only when a caller opts in.
 - **F2 fast-follow: Gate-rescue contract pinned + log-failure hardened**
   (Role 6 PR-8, `wild-wxk`; Armstrong F2 sign-off findings 2 + 4 — **closes the
   F2 epic `wild-rvv.4.1`**).
@@ -247,8 +285,15 @@ section splits into a separate file.
   - **Audit-pipeline failure is no longer doubly silent.** `Evaluator#emit_audit`
     previously swallowed write failures to `nil`. It now logs them to
     `Wild.config.audit_logger.error` (still never raises — a broken audit log
-    must not break the gate). Only a simultaneous writer-AND-logger outage is
-    terminally silent.
+    must not break the gate). **Correction (review wave, finding f-l08-4):**
+    this guarantee originally only held when a caller had explicitly
+    configured `audit_logger`: it defaults to `nil` (`configuration.rb`), so
+    a single writer failure under default configuration was terminally
+    silent, not merely "a simultaneous writer-AND-logger outage" as stated
+    here previously. `log_audit_failure` now falls back to `Kernel#warn`
+    ($stderr) whenever no usable logger is configured (or the configured one
+    itself raises), so a writer failure is never silent out of the box; only
+    an unwritable `$stderr` defeats it.
   - `Audit::Event` gains a third result value, `evaluation_error` (distinct
     from `denied`), so audit readers can tell "policy said no" apart from "the
     gate broke and failed closed". `:evaluation_error` is always a denial

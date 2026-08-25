@@ -306,12 +306,16 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
     end
   end
 
-  describe "when BOTH the audit writer AND the logger are broken (terminal silent path)" do
-    # The one genuinely-terminal silent path, by design. It requires two
-    # simultaneous failures — writer raises on write, logger raises on error.
-    # The contract: the gate STILL does not raise and STILL returns its
-    # computed result. This pins Armstrong's F2 terminal-silence boundary so a
-    # refactor can't silently widen it.
+  describe "when BOTH the audit writer AND the configured logger are broken" do
+    # f-l08-4: this used to be the one genuinely-terminal silent path: writer
+    # raises on write, logger raises on #error, and log_audit_failure's `return
+    # unless logger.respond_to?(:error)` guard never even applied (a logger WAS
+    # configured here). Now log_audit_failure falls back to Kernel#warn
+    # ($stderr) when the configured logger itself blows up, so this dual
+    # failure is no longer terminally silent either: only an unwritable
+    # $stderr defeats it. The contract pinned here: the gate STILL does not
+    # raise and STILL returns its computed result, AND the failure is still
+    # observable on $stderr.
     let(:exploding_writer) do
       Class.new do
         def write(_event) = raise(IOError, "audit disk full")
@@ -349,6 +353,15 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
         capability_name: :basic_introspection
       )
       expect(result).to be_allowed
+    end
+
+    it "falls back to $stderr instead of going fully silent (f-l08-4)" do
+      expect do
+        evaluator.evaluate(
+          caller_id: "service-account:introspection-agent",
+          capability_name: :basic_introspection
+        )
+      end.to output(/\[wild:capability_gate\] audit emission failed: IOError: audit disk full/).to_stderr
     end
   end
 
@@ -422,6 +435,62 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
         Wild.configure { |c| c.environment = :production }
         expect { evaluate! }.not_to raise_error
       end
+    end
+  end
+
+  # f-l08-2: validation enabled (default :auto is on in :development/:test,
+  # the default environment) but `json_schemer` is absent. This previously
+  # raised Wild::ConfigurationError from SchemaValidator's private `schemer`
+  # method, then got caught by emit_audit's blanket StandardError rescue and
+  # (with audit_logger nil by default) vanished: the evaluation returned
+  # ALLOW with zero audit event and zero log line. It must now surface loudly.
+  describe "audit-schema validator misconfigured (json_schemer absent, F2, f-l08-2)" do
+    let(:evaluator) do
+      Wild::CapabilityGate::Evaluator.from_files(
+        capabilities_path: capabilities_path,
+        grants_path: grants_path,
+        audit_writer: collecting_writer
+      )
+    end
+
+    before do
+      Wild::CapabilityGate::Audit::SchemaValidator.reset!
+      allow(Wild::CapabilityGate::Audit::SchemaValidator)
+        .to receive(:require).with("json_schemer").and_raise(LoadError)
+    end
+
+    after { Wild::CapabilityGate::Audit::SchemaValidator.reset! }
+
+    def evaluate!
+      evaluator.evaluate(
+        caller_id: "service-account:introspection-agent",
+        capability_name: :basic_introspection
+      )
+    end
+
+    it "raises Wild::ConfigurationError out of Evaluator#evaluate (not swallowed to a silent ALLOW)" do
+      expect { evaluate! }.to raise_error(Wild::ConfigurationError, /json_schemer/)
+    end
+
+    it "does not write an audit event for the aborted evaluation" do
+      begin
+        evaluate!
+      rescue Wild::ConfigurationError
+        nil
+      end
+      expect(collecting_writer.events).to be_empty
+    end
+
+    it "raises Wild::ConfigurationError out of Gate#evaluate too (f-l08-3 extension)" do
+      log = Tempfile.new(["gate-schema-config", ".jsonl"])
+      gate = Wild::CapabilityGate::Gate.new(
+        config_path: File.join(fixtures_dir, "config"), audit_log_path: log.path
+      )
+
+      expect { gate.evaluate(caller: "service-account:introspection-agent", capability: :basic_introspection) }
+        .to raise_error(Wild::ConfigurationError, /json_schemer/)
+    ensure
+      log.close!
     end
   end
 end

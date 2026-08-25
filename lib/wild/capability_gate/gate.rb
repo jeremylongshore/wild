@@ -34,11 +34,20 @@ module Wild
 
       # Evaluate whether the caller is granted the named capability.
       #
-      # Returns an EvaluationResult — always. Never raises.
-      # If evaluation fails for any reason, the result is denial with
-      # reason :evaluation_error (fail-closed per Doc 003).
+      # Returns an EvaluationResult for every policy/runtime outcome, never
+      # raises for those. If evaluation fails for any reason at that layer, the
+      # result is denial with reason :evaluation_error (fail-closed per Doc 003).
+      #
+      # f-l08-3: a developer-facing config/schema bug (a non-conforming audit
+      # event, or audit-schema validation enabled with `json_schemer` absent)
+      # is NOT a policy/runtime outcome, it re-raises through this method,
+      # matching #initialize's existing "raises on configuration errors, does
+      # not silently swallow them" contract, rather than being demoted to an
+      # audit-blind :evaluation_error denial.
       def evaluate(caller:, capability:, context: {})
         @evaluator.evaluate(caller_id: caller, capability_name: capability, context: context)
+      rescue Wild::CapabilityGate::AuditSchemaError, Wild::ConfigurationError
+        raise
       rescue StandardError => e
         deny_with_error(caller, capability, e)
       end
@@ -60,15 +69,25 @@ module Wild
         )
       end
 
-      # Last-resort safety net. Reaching here means Evaluator#evaluate broke
-      # its never-raises contract — that is a BUG, not a policy outcome, and
-      # this path is audit-blind BY CONSTRUCTION (the Gate holds no audit
-      # writer; emission lives in the Evaluator where the writer is). The
-      # Evaluator's own rescue emits the evaluation_error event for every
-      # real failure; if execution reaches here the Evaluator's contract has
-      # been violated and the missing audit event is the signal. Pinned by a
-      # Gate-rescue contract test (wild-rvv.4.1 fast-follow per Armstrong F2
-      # sign-off). Still fails closed.
+      # Last-resort safety net for genuine runtime/policy failures. Reaching
+      # here means Evaluator#evaluate raised something other than the two
+      # config/schema errors #evaluate re-raises above: that is a BUG, not a
+      # policy outcome, and this path is audit-blind BY CONSTRUCTION (the Gate
+      # holds no audit writer; emission lives in the Evaluator where the
+      # writer is). The Evaluator's own rescue emits the evaluation_error
+      # event for every real failure; if execution reaches here the
+      # Evaluator's contract has been violated and the missing audit event is
+      # the signal. Pinned by a Gate-rescue contract test (wild-rvv.4.1
+      # fast-follow per Armstrong F2 sign-off). Still fails closed.
+      #
+      # f-l08-3 correction: this rescue is NOT unreachable today (a prior
+      # version of this comment, and gate_spec.rb, both claimed it was).
+      # Evaluator#evaluate deliberately re-raises AuditSchemaError, and this
+      # StandardError rescue used to be the ONLY thing catching it: silently
+      # demoting a "surface loudly" developer-bug signal into an audit-blind
+      # :evaluation_error denial. The explicit rescue added above now
+      # intercepts AuditSchemaError and ConfigurationError before they reach
+      # here.
       def deny_with_error(caller_value, capability, error)
         EvaluationResult.denied(
           capability_name: capability || :unknown,

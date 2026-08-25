@@ -34,6 +34,62 @@ module Wild
       rescue StandardError
         "<unprintable message>"
       end
+
+      # Coerce to a Hash without ever raising. A caller-supplied `context` that
+      # Hash() cannot convert (a String, an Array that is not pairs, any object
+      # whose #to_hash itself raises) degrades to a placeholder hash carrying
+      # the offending value's inspect rather than blowing up event construction
+      # (f-l08-1: one non-Hash `context` argument on the documented public
+      # `evaluate` entry point used to raise inside Audit::Event#initialize,
+      # get swallowed by emit_audit's rescue, and leave the ALLOW/DENY result
+      # with NO audit line written).
+      def safe_context(value)
+        Hash(value)
+      rescue StandardError
+        { raw: safe_inspect(value) }
+      end
+
+      # #inspect on an arbitrary value is not guaranteed safe either; degrade
+      # rather than raise while building the safe_context placeholder.
+      def safe_inspect(value)
+        value.inspect[0, 200]
+      rescue StandardError
+        "<uninspectable>"
+      end
+
+      # Log an audit emission failure without ever raising (Evaluator#emit_audit
+      # calls this from its own rescue: a raise here would defeat the
+      # never-raises guarantee). f-l08-4: Wild.config.audit_logger defaults to
+      # nil, so without the warn fallback a single writer failure was
+      # terminally silent while ALLOW/DENY was still returned. Kernel#warn
+      # ($stderr) is always available and keeps "audit failure is never
+      # doubly silent" true out of the box, not only when a caller explicitly
+      # configures a logger.
+      def log_audit_failure(error, result)
+        message = build_audit_failure_message(error, result)
+        logger = Wild.config.audit_logger
+        logger.respond_to?(:error) ? logger.error(message) : warn(message)
+      rescue StandardError
+        # The configured logger raised from #error, or message construction
+        # itself raised. Rebuild the message fresh rather than rely on a
+        # binding from the failed attempt; only an unwritable $stderr defeats
+        # this last resort.
+        begin
+          warn build_audit_failure_message(error, result)
+        rescue StandardError
+          nil
+        end
+      end
+
+      # error.class is always safe; error.message is guarded via safe_message
+      # (a pathological exception whose #message raises must not turn a
+      # should-have-logged into terminal silence). Armstrong F2 fast-follow
+      # finding 4 (wild-wxk).
+      def build_audit_failure_message(error, result)
+        "[wild:capability_gate] audit emission failed: #{error.class}: #{safe_message(error)} " \
+          "(caller=#{result.caller_id.inspect} capability=#{result.capability_name.inspect} " \
+          "reason=#{result.reason.inspect})"
+      end
     end
 
     # The core access decision engine.
@@ -85,13 +141,16 @@ module Wild
 
         emit_audit(result, context)
         result
-      rescue Wild::CapabilityGate::AuditSchemaError
-        # F2 (wild-rvv.4.1.2): a non-conforming audit event is a developer bug,
-        # not a runtime fault — surface it. This only fires when validation is
-        # enabled (dev/test by default), so production (validation off) keeps the
-        # never-raises guarantee untouched. Must come BEFORE the StandardError
-        # rescue, or the schema violation would be misreported as an
-        # evaluation_error denial.
+      rescue Wild::CapabilityGate::AuditSchemaError, Wild::ConfigurationError
+        # F2 (wild-rvv.4.1.2) + f-l08-2: a non-conforming audit event, or an
+        # audit-validator misconfiguration (validation enabled but the
+        # `json_schemer` gem is absent: schema_validator.rb's ConfigurationError),
+        # is a developer bug, not a runtime fault: surface it loudly rather than
+        # let it degrade to a silent ALLOW/DENY with zero audit and zero log. This
+        # only fires when validation is enabled (dev/test by default), so
+        # production (validation off) keeps the never-raises guarantee untouched.
+        # Must come BEFORE the StandardError rescue, or either error would be
+        # misreported as an evaluation_error denial.
         raise
       rescue StandardError => e
         # F2 (council rev2, Armstrong): the decision logic raised — fail closed
@@ -178,8 +237,16 @@ module Wild
       def emit_audit(result, context)
         return unless @audit_writer
 
+        # f-l08-1: coerce defensively BEFORE Event construction. A hostile
+        # `context` (a String, a non-pair Array, an object whose #to_hash
+        # raises) used to blow up `Hash(context)` inside Audit::Event#initialize;
+        # that raise was caught below by the StandardError rescue and, with the
+        # default nil audit_logger, produced zero audit record and zero log line
+        # for an ALLOW/DENY that had already been decided. safe_context never
+        # raises, so event construction always succeeds and this method's own
+        # rescue clauses are reserved for genuine write/validation failures.
         event = Audit::Event.from_evaluation(
-          result, registry: @registry, session_id: @session_id, context: context
+          result, registry: @registry, session_id: @session_id, context: safe_context(context)
         )
         # F2 (wild-rvv.4.1.2): in dev/test, prove the event conforms to
         # audit_event.yml BEFORE it is written. A schema violation re-raises
@@ -188,31 +255,20 @@ module Wild
         # exists for genuine write/IO failures. Off in prod by default.
         Audit::SchemaValidator.validate!(event.to_h) if Audit::SchemaValidator.enabled?
         @audit_writer.write(event)
-      rescue Wild::CapabilityGate::AuditSchemaError
+      rescue Wild::CapabilityGate::AuditSchemaError, Wild::ConfigurationError
+        # f-l08-2: SchemaValidator.validate! (via its private `schemer` method)
+        # raises Wild::ConfigurationError when validation is enabled but the
+        # `json_schemer` gem is not on the bundle. That was previously caught by
+        # the StandardError rescue below and, with audit_logger nil by default,
+        # every evaluation silently returned ALLOW/DENY with zero audit and zero
+        # log: an absent dev dependency should fail loudly at first use, not
+        # degrade the gate's audit trail. Re-raise here, ordered before
+        # StandardError, exactly as AuditSchemaError already does.
         raise
       rescue StandardError => e
+        # log_audit_failure lives in SafeCoercion (never raises out of here by
+        # contract; also shared with the module's other never-raising helpers).
         log_audit_failure(e, result)
-        nil
-      end
-
-      def log_audit_failure(error, result)
-        logger = Wild.config.audit_logger
-        return unless logger.respond_to?(:error)
-
-        # error.class is always safe; error.message is guarded (a pathological
-        # exception whose #message raises must not turn a should-have-logged
-        # into terminal silence — we still log the class). Armstrong F2
-        # fast-follow finding 4 (wild-wxk).
-        logger.error(
-          "[wild:capability_gate] audit emission failed: #{error.class}: #{safe_message(error)} " \
-          "(caller=#{result.caller_id.inspect} capability=#{result.capability_name.inspect} " \
-          "reason=#{result.reason.inspect})"
-        )
-      rescue StandardError
-        # The audit logger itself is broken. There is nowhere left to write;
-        # do not raise out of the gate. This is the one genuinely-terminal
-        # silent path, and it requires BOTH the audit writer AND the configured
-        # logger to be broken simultaneously.
         nil
       end
     end

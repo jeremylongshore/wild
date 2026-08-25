@@ -47,6 +47,24 @@ RSpec.describe Wild::CapabilityGate::Audit::SchemaValidator do
     end
   end
 
+  # f-l08-2: validation enabled (:auto default resolves to on in dev/test) but
+  # `json_schemer` is a development-only gem (wild.gemspec) that a consuming
+  # app may not have added. Prove the LoadError becomes a loud, greppable
+  # Wild::ConfigurationError at first use rather than the LoadError itself
+  # (which previously reached emit_audit's blanket StandardError rescue and,
+  # with audit_logger nil by default, vanished with zero audit and zero log).
+  describe ".validate! when json_schemer is not available" do
+    after { described_class.reset! }
+
+    it "raises Wild::ConfigurationError, not a bare LoadError" do
+      described_class.reset!
+      allow(described_class).to receive(:require).with("json_schemer").and_raise(LoadError)
+
+      expect { described_class.validate!(conforming) }
+        .to raise_error(Wild::ConfigurationError, /json_schemer/)
+    end
+  end
+
   describe ".valid?" do
     it "is true for a conforming event and false otherwise" do
       expect(described_class.valid?(conforming)).to be true

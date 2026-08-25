@@ -398,6 +398,27 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
 
         expect(result).to be_allowed
       end
+
+      # f-l08-4: Wild.config.audit_logger defaults to nil (configuration.rb),
+      # so before this fix a single writer failure was terminally silent:
+      # log_audit_failure's `return unless logger.respond_to?(:error)` fired
+      # and there was nowhere else the failure was recorded, while the CHANGELOG
+      # claimed only a simultaneous writer-AND-logger outage was terminal.
+      # Kernel#warn ($stderr) is now the default-config fallback.
+      it "falls back to Kernel#warn on $stderr when no audit_logger is configured" do
+        broken_writer = instance_double(Wild::CapabilityGate::Audit::JsonLinesWriter)
+        allow(broken_writer).to receive(:write).and_raise(IOError, "disk full")
+
+        ev = described_class.new(
+          registry: Wild::CapabilityGate::Registry.from_file(capabilities_path),
+          grants: Wild::CapabilityGate::Evaluator::GrantLoader.load_file(grants_path),
+          audit_writer: broken_writer
+        )
+
+        expect do
+          ev.evaluate(caller_id: "service-account:introspection-agent", capability_name: :basic_introspection)
+        end.to output(/\[wild:capability_gate\] audit emission failed: IOError: disk full/).to_stderr
+      end
     end
   end
 
