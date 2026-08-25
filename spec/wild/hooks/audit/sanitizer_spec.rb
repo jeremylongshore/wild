@@ -75,6 +75,77 @@ RSpec.describe Wild::Hooks::Audit::Sanitizer do
         expect(sym).to eq(str)
       end
     end
+
+    describe "array recursion (f-l01 verifier follow-up 1)" do
+      it "recurses into a hash nested inside an array value" do
+        out = sanitizer.sanitize(params: [{ password: "p2" }])
+        expect(out[:params].first[:password]).to eq(described_class::REDACTED)
+      end
+
+      it "recurses into arrays nested inside arrays" do
+        out = sanitizer.sanitize(params: [[{ password: "p2" }]])
+        expect(out[:params].first.first[:password]).to eq(described_class::REDACTED)
+      end
+
+      it "passes through scalar array elements unchanged" do
+        out = sanitizer.sanitize(tags: %w[a b c])
+        expect(out[:tags]).to eq(%w[a b c])
+      end
+
+      it "leaves non-matching hashes inside an array otherwise intact" do
+        out = sanitizer.sanitize(params: [{ password: "p2", name: "Alice" }])
+        expect(out[:params].first[:name]).to eq("Alice")
+      end
+    end
+
+    describe "key normalization (f-l01 verifier follow-up 4)" do
+      it "matches a camelCase key against the snake_case pattern" do
+        out = sanitizer.sanitize(apiKey: "sk-live-abc")
+        expect(out[:apiKey]).to eq(described_class::REDACTED)
+      end
+
+      it "matches an UPPER_SNAKE key against the snake_case pattern" do
+        out = sanitizer.sanitize(API_KEY: "sk-live-abc")
+        expect(out[:API_KEY]).to eq(described_class::REDACTED)
+      end
+
+      it "matches a hyphenated key against the snake_case pattern" do
+        out = sanitizer.sanitize("api-key" => "sk-live-abc")
+        expect(out["api-key"]).to eq(described_class::REDACTED)
+      end
+
+      it "matches a space-separated key against the snake_case pattern" do
+        out = sanitizer.sanitize("Api Key" => "sk-live-abc")
+        expect(out["Api Key"]).to eq(described_class::REDACTED)
+      end
+    end
+  end
+
+  describe "#sanitize_string (f-l01 verifier follow-up 2)" do
+    it "redacts a password=value token inside free text" do
+      out = sanitizer.sanitize_string("connection failed: password=hunter2")
+      expect(out).not_to include("hunter2")
+      expect(out).to include("password=[REDACTED]")
+    end
+
+    it "redacts a token=value token inside free text without disturbing surrounding words" do
+      out = sanitizer.sanitize_string("auth error: api_key=sk-live-abc123 retrying")
+      expect(out).to eq("auth error: api_key=[REDACTED] retrying")
+    end
+
+    it "leaves non-secret key=value tokens untouched" do
+      out = sanitizer.sanitize_string("retries=3 timeout=500")
+      expect(out).to eq("retries=3 timeout=500")
+    end
+
+    it "leaves plain text with no key=value shape untouched" do
+      out = sanitizer.sanitize_string("boom")
+      expect(out).to eq("boom")
+    end
+
+    it "returns nil unchanged" do
+      expect(sanitizer.sanitize_string(nil)).to be_nil
+    end
   end
 
   describe "custom patterns" do

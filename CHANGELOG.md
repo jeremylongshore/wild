@@ -454,6 +454,23 @@ section splits into a separate file.
 
 ### Wild::Hooks
 
+- **Audit::Logger routes context through Audit::Sanitizer; Runner isolates its
+  observability calls** (review wave, finding f-l01-1 and f-l01-2). Logger#record
+  previously formatted context values with raw `v.inspect`, so a password or
+  api_key passed as hook context landed verbatim in `context_summary`; it now
+  runs every context key/value through the existing (until now unused)
+  `Wild::Hooks::Audit::Sanitizer` (an injectable `sanitizer:` keyword defaults
+  to `Sanitizer.new`), closing f-l01-1 and, incidentally, f-l01-5 (the
+  Sanitizer now has a real caller). Separately, Runner#execute called
+  `audit_logger.record` / `health_monitor.record` with no isolation, so a
+  raising sink aborted the invocation after the handler had already run; those
+  two calls are now wrapped so a raising sink cannot abort the invocation, and
+  the failure is recorded visibly (`observability_failures` counter plus a
+  warn through `Wild.config.audit_logger`, mirroring the escape hatch
+  `CapabilityGate::Evaluator#log_audit_failure` already uses) rather than
+  swallowed, per council F2. Advances bead "Extract audit-logging pattern to
+  Wild::Hooks::Audit substrate" (ToolHandler wire-or-delete, f-l01-3, remains).
+
 - **Audit substrate extension landed** — closes the structural-duplication
   portion of `wild-rvv.6.2`. Two new classes/modules under the existing
   `Wild::Hooks::Audit` namespace (which already hosts `Trail` + `Logger`
