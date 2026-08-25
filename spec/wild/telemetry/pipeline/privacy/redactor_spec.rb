@@ -107,30 +107,137 @@ RSpec.describe Wild::Telemetry::Pipeline::Privacy::Redactor do
   end
 
   describe "#redact_metadata" do
-    let(:metadata) do
-      {
-        tool_name: "exec",
-        tool_input: {
-          "api_key" => "AKIAIOSFODNN7EXAMPLE",
-          "notes" => ["contact bob@example.com", "not secret"],
-          "count" => 3,
-          "enabled" => true
+    describe "key-aware redaction (f-l03-1 item 1)" do
+      it "redacts the whole value of a String secret-named key even though the value itself has no matching pattern" do
+        result = redactor.redact_metadata({ "api_key" => "sk_live_abcdefghijklmnop" })
+        expect(result["api_key"]).to eq("[REDACTED]")
+      end
+
+      it "redacts the whole value of a nested secret-named key regardless of shape" do
+        result = redactor.redact_metadata({ "aws_secret" => { "value" => "not-a-known-pattern", "n" => 1 } })
+        expect(result["aws_secret"]).to eq("[REDACTED]")
+      end
+
+      it "matches secret-ish key names after normalizing case and separators" do
+        result = redactor.redact_metadata({ "Authorization-Token" => "whatever-this-is" })
+        expect(result["Authorization-Token"]).to eq("[REDACTED]")
+      end
+
+      it "does not redact a non-secret key's whole value, only scrubs its secret leaves" do
+        result = redactor.redact_metadata({ "tool_input" => { "api_key" => "AKIAIOSFODNN7EXAMPLE", "count" => 3 } })
+        expect(result["tool_input"]["api_key"]).to eq("[REDACTED]")
+        expect(result["tool_input"]["count"]).to eq(3)
+      end
+    end
+
+    describe "secrets-only leaf scrubbing, not content-style over-redaction (f-l03-1 item 2)" do
+      let(:mcp_shaped_metadata) do
+        {
+          method: "tools/call",
+          tool_name: "resources/read",
+          file_path: "/home/x/app.rb",
+          remote: "git@github.com:acme/app.git",
+          aws_key: "AKIAIOSFODNN7EXAMPLE"
         }
-      }
-    end
-    let(:result) { redactor.redact_metadata(metadata) }
+      end
+      let(:result) { redactor.redact_metadata(mcp_shaped_metadata) }
 
-    it "scrubs secret strings, including inside arrays" do
-      expect(result[:tool_input]["api_key"]).to include("[REDACTED]")
-      expect(result[:tool_input]["notes"].first).to include("[REDACTED]")
+      it "leaves MCP method and tool names untouched" do
+        expect(result[:method]).to eq("tools/call")
+        expect(result[:tool_name]).to eq("resources/read")
+      end
+
+      it "leaves an absolute file path untouched" do
+        expect(result[:file_path]).to eq("/home/x/app.rb")
+      end
+
+      it "leaves a git remote URL (email-shaped) untouched" do
+        expect(result[:remote]).to eq("git@github.com:acme/app.git")
+      end
+
+      it "still redacts an actual secret pattern" do
+        expect(result[:aws_key]).to include("[REDACTED]")
+        expect(result[:aws_key]).not_to include("AKIAIOSFODNN7EXAMPLE")
+      end
     end
 
-    it "leaves non-string values and hash keys untouched" do
-      expect(result[:tool_input]["notes"][1]).to eq("not secret")
-      expect(result[:tool_input]["count"]).to eq(3)
-      expect(result[:tool_input]["enabled"]).to be(true)
-      expect(result.keys).to eq(metadata.keys)
-      expect(result[:tool_input].keys).to eq(metadata[:tool_input].keys)
+    describe "leaf scrubbing under non-secret-named keys" do
+      let(:metadata) do
+        {
+          tool_name: "exec",
+          tool_input: {
+            "aws_key" => "AKIAIOSFODNN7EXAMPLE",
+            "notes" => ["contact bob@example.com", "not secret"],
+            "count" => 3,
+            "enabled" => true
+          }
+        }
+      end
+      let(:result) { redactor.redact_metadata(metadata) }
+
+      it "scrubs a secret pattern nested inside an array" do
+        expect(result[:tool_input]["aws_key"]).to include("[REDACTED]")
+      end
+
+      it "leaves a non-secret-pattern string (an email) inside an array untouched, per item 2" do
+        expect(result[:tool_input]["notes"].first).to eq("contact bob@example.com")
+        expect(result[:tool_input]["notes"][1]).to eq("not secret")
+      end
+
+      it "leaves non-string values and hash keys untouched" do
+        expect(result[:tool_input]["count"]).to eq(3)
+        expect(result[:tool_input]["enabled"]).to be(true)
+        expect(result.keys).to eq(metadata.keys)
+        expect(result[:tool_input].keys).to eq(metadata[:tool_input].keys)
+      end
+    end
+
+    describe "class preservation (f-l03-1 item 4)" do
+      it "rebuilds an ActiveSupport::HashWithIndifferentAccess as the same class" do
+        metadata = ActiveSupport::HashWithIndifferentAccess.new(tool_name: "exec", api_key: "sk_live_x")
+        result = redactor.redact_metadata(metadata)
+        expect(result).to be_a(ActiveSupport::HashWithIndifferentAccess)
+        expect(result[:tool_name]).to eq("exec")
+        expect(result["tool_name"]).to eq("exec")
+      end
+    end
+
+    describe "depth guard and cycle detection (f-l03-1 item 5)" do
+      it "raises PrivacyError instead of SystemStackError for a self-referential hash" do
+        cyclic = {}
+        cyclic["self"] = cyclic
+        expect { redactor.redact_metadata(cyclic) }
+          .to raise_error(Wild::Telemetry::Pipeline::PrivacyError, /circular/)
+      end
+
+      it "raises PrivacyError for metadata nested deeper than the depth cap" do
+        deep = "leaf"
+        70.times { |i| deep = { "level#{i}" => deep } }
+        expect { redactor.redact_metadata(deep) }
+          .to raise_error(Wild::Telemetry::Pipeline::PrivacyError, /depth/)
+      end
+
+      it "does not raise for a shared (non-cyclic) sub-hash referenced twice" do
+        shared = { "count" => 1 }
+        metadata = { "a" => shared, "b" => shared }
+        expect { redactor.redact_metadata(metadata) }.not_to raise_error
+      end
+    end
+
+    describe "Symbol leaf values (f-l03-1 item 6)" do
+      it "scrubs a Symbol value the same as a String, returned as a String" do
+        result = redactor.redact_metadata({ "token_hint" => :AKIAIOSFODNN7EXAMPLE })
+        expect(result["token_hint"]).to be_a(String)
+        expect(result["token_hint"]).to include("[REDACTED]")
+      end
+
+      # Documented per item 6: Hash *keys* are never rewritten, even when a key
+      # is itself Symbol-typed and secret-shaped as a VALUE would be redacted
+      # under a different key. Key-name redaction is a separate, deferred scope.
+      it "does not rewrite Hash keys, only key-matched or leaf-scrubbed values" do
+        result = redactor.redact_metadata({ api_key: "sk_live_abc" })
+        expect(result.keys).to eq([:api_key])
+      end
     end
 
     it "returns nil for nil metadata" do
@@ -156,6 +263,12 @@ RSpec.describe Wild::Telemetry::Pipeline::Privacy::Redactor do
       t = make_transcript
       result = redactor.redact_transcript(t)
       expect(result.metadata[:redacted]).to be(true)
+    end
+
+    it "scrubs secrets inside transcript-level metadata, not just turns (f-l03-1 item 3)" do
+      t = make_transcript(metadata: { "api_key" => "sk_live_abcdefghijklmnop" })
+      result = redactor.redact_transcript(t)
+      expect(result.metadata["api_key"]).to eq("[REDACTED]")
     end
 
     it "preserves source_type, source_id, and created_at" do

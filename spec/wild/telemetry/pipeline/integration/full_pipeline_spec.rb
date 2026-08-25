@@ -42,9 +42,13 @@ RSpec.describe "Full pipeline integration" do
     end
 
     it "scrubs secrets from tool_use metadata end to end (f-l03-1)" do
-      # AWS access key + email shapes, not "api_key=..." JSON, so this isolates
-      # the metadata-redaction fix from the separate JSON-quoted-key pattern gap
-      # (f-l03-2, out of scope for this PR).
+      # AWS access key shape, not "api_key=..." JSON, so this isolates the
+      # metadata-redaction fix from the separate JSON-quoted-key pattern gap
+      # (f-l03-2, out of scope for this PR). "contact" is deliberately NOT a
+      # secret-named key and its email value is deliberately left unredacted
+      # here: metadata leaf scrubbing is secrets-only (item 2), not the same
+      # content-oriented EMAIL/IP/path stripping #redact_content applies, so a
+      # structural value under a non-secret key round-trips untouched.
       line = {
         type: "tool_use",
         name: "exec",
@@ -54,8 +58,31 @@ RSpec.describe "Full pipeline integration" do
       exported = json_exporter.export(transcripts)
 
       expect(exported).not_to include("AKIAIOSFODNN7EXAMPLE")
-      expect(exported).not_to include("bob@example.com")
+      expect(exported).to include("bob@example.com")
       expect(exported).to include("[REDACTED]")
+    end
+
+    it "does not mangle MCP-shaped metadata fields with content-oriented patterns (f-l03-1 item 2)" do
+      line = {
+        type: "tool_use",
+        name: "exec",
+        input: { "method" => "tools/call", "file_path" => "/home/x/app.rb" }
+      }.to_json
+      transcripts = Wild::Telemetry::Pipeline.process(line, adapter: adapter, source_id: "session-shape")
+      exported = json_exporter.export(transcripts)
+
+      expect(exported).to include("tools/call")
+      expect(exported).to include("/home/x/app.rb")
+    end
+
+    it "redacts a turn exactly once end to end (f-l03-1 item 7)" do
+      redactor = Wild::Telemetry::Pipeline::Privacy::Redactor.new
+      allow(redactor).to receive(:redact_turn).and_call_original
+      allow(Wild::Telemetry::Pipeline::Privacy::Redactor).to receive(:new).and_return(redactor)
+
+      transcripts = Wild::Telemetry::Pipeline.process(jsonl, adapter: adapter, source_id: "session-once")
+
+      expect(redactor).to have_received(:redact_turn).exactly(transcripts.sum(&:turn_count)).times
     end
   end
 

@@ -366,6 +366,29 @@ section splits into a separate file.
   boundary normalization wherever data crosses namespaces". Does not address
   the separate JSON-quoted `api_key` pattern gap (f-l03-2), which lands as
   its own PR.
+- **Metadata redaction hardened: key-aware, secrets-only, class-preserving,
+  bounded, and single-pass** (paired-verifier follow-up on the item above,
+  f-l03-1). A Hash key matching a secret-name pattern (`api_key`,
+  `aws_secret`, `Authorization`, etc., normalized for case/separators) now
+  redacts its whole value regardless of shape, closing the gap where
+  `{"api_key" => "sk_live_..."}` exported verbatim because the value itself
+  matched no built-in pattern. Metadata leaf scrubbing is now secrets-only
+  (API key, AWS key/secret, GitHub token, bearer token, custom patterns);
+  it no longer applies the EMAIL/IP/ABSOLUTE_PATH/file-content patterns
+  `#redact_content` uses, which were mangling structural metadata like
+  `method: "tools/call"`, `tool_name`, `file_path`, and `git@`-style remote
+  URLs. `redact_transcript` now scrubs `transcript.metadata` with the same
+  rules (it previously passed it through unredacted while stamping
+  `redacted: true`). The rebuild preserves the source Hash's class, so
+  `ActiveSupport::HashWithIndifferentAccess` metadata keeps working after
+  redaction. Recursion is capped at 64 levels with cycle detection, raising
+  `PrivacyError` instead of `SystemStackError` on a malformed or
+  self-referential payload. `Pipeline.run_pipeline` no longer redacts each
+  turn once during normalization and again inside `redact_transcript`; turns
+  are redacted exactly once, at export. New `Privacy::MetadataRedactor`
+  holds this logic (split out of `Redactor` to stay under
+  `Metrics/ClassLength`). Advances bead "F7: Add boundary normalization
+  wherever data crosses namespaces".
 
 ### Wild::Telemetry::Analysis
 
