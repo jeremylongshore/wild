@@ -32,6 +32,7 @@ require "wild/telemetry/pipeline/normalization/tool_extractor"
 
 # Privacy
 require "wild/telemetry/pipeline/privacy/content_filter"
+require "wild/telemetry/pipeline/privacy/metadata_redactor"
 require "wild/telemetry/pipeline/privacy/redactor"
 
 # Export — flagged for F6 wire-or-delete audit under wild-rvv.5.4.
@@ -61,9 +62,22 @@ module Wild
           }
         end
 
+        # Redacts exactly once: #redact_transcript below already redacts every
+        # turn (plus transcript-level metadata) via Redactor#redact_turn, so
+        # turns are intentionally left unredacted going into intent/tool
+        # extraction rather than redacted here AND again by redact_transcript
+        # (f-l03-1 item 7: the double pass was non-idempotent for markers that
+        # happen to match a pattern, and did the redaction work twice).
+        #
+        # Redaction is the LAST step that touches any field that gets
+        # exported: intent_detector and tool_extractor run upstream of it on
+        # unredacted turns (by design, see above), so any field they derive
+        # from turn content, e.g. Intent#description, is redacted inside
+        # #redact_transcript, not here, to keep that single boundary complete
+        # (f-l03-1 security-review follow-up: a derived Intent#description
+        # copied a raw content slice past this boundary).
         def run_pipeline(transcript, pipe, config)
           turns = pipe[:normalizer].normalize(transcript.turns, config: config)
-          turns = turns.map { |t| pipe[:redactor].redact_turn(t, config: config) }
           intents = pipe[:intent_detector].detect(turns, config: config)
           tool_refs = pipe[:tool_extractor].extract(turns)
           enriched = build_enriched_transcript(transcript, turns, intents, tool_refs)
