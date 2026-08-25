@@ -173,5 +173,53 @@ RSpec.describe Wild::Hooks::Execution::Runner do
         expect(monitor.all_metrics.size).to eq(1)
       end
     end
+
+    context "when an observability sink raises (f-l01-2)" do
+      subject(:runner) do
+        described_class.new(registry: registry, config: config, audit_logger: raising_logger,
+                            health_monitor: monitor)
+      end
+
+      let(:raising_logger) do
+        instance_double(Wild::Hooks::Audit::Logger).tap do |dbl|
+          allow(dbl).to receive(:record).and_raise(StandardError, "sink is down")
+        end
+      end
+      let(:monitor) { Wild::Hooks::Health::Monitor.new }
+
+      before do
+        registry.register_handler(hook_name: "before_tool_call", callable: ->(_) { :ok })
+      end
+
+      it "still returns the handler result instead of aborting the invocation" do
+        results = runner.execute("before_tool_call", {})
+        expect(results.size).to eq(1)
+        expect(results.first).to be_success
+        expect(results.first.return_value).to eq(:ok)
+      end
+
+      it "does not raise out of #execute" do
+        expect { runner.execute("before_tool_call", {}) }.not_to raise_error
+      end
+
+      it "still records to a sink that did not raise" do
+        runner.execute("before_tool_call", {})
+        expect(monitor.all_metrics.size).to eq(1)
+      end
+
+      it "records the failure visibly via observability_failures instead of swallowing it" do
+        expect { runner.execute("before_tool_call", {}) }
+          .to change(runner, :observability_failures).from(0).to(1)
+      end
+
+      it "logs the sink failure through the configured audit_logger" do
+        configured_logger = instance_double(Logger, error: nil)
+        allow(Wild.config).to receive(:audit_logger).and_return(configured_logger)
+
+        runner.execute("before_tool_call", {})
+
+        expect(configured_logger).to have_received(:error).with(/audit_logger observability sink failed/)
+      end
+    end
   end
 end

@@ -8,9 +8,10 @@ module Wild
       # Respects enable_audit_logging and max_audit_entries configuration.
       # When the audit log is full, the oldest entries are dropped (ring buffer).
       class Logger
-        def initialize(config: Wild.config.hooks, trail: nil)
-          @config = config
-          @trail  = trail || Trail.new(max_entries: config.max_audit_entries)
+        def initialize(config: Wild.config.hooks, trail: nil, sanitizer: nil)
+          @config    = config
+          @trail     = trail || Trail.new(max_entries: config.max_audit_entries)
+          @sanitizer = sanitizer || Sanitizer.new
         end
 
         def record(hook_result, context = {})
@@ -36,7 +37,11 @@ module Wild
         def summarise_context(context)
           return "" unless context.is_a?(Hash) && !context.empty?
 
-          context.map { |k, v| "#{k}=#{v.inspect}" }.join(", ")
+          # F2 (wild-rvv, hooks audit): route every context value through the
+          # Sanitizer before it lands in the trail. Without this, a raw
+          # password/token/api_key passed as hook context was recorded
+          # verbatim via v.inspect (f-l01-1).
+          @sanitizer.sanitize(context).map { |k, v| "#{k}=#{v.inspect}" }.join(", ")
         end
       end
     end

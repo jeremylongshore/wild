@@ -56,6 +56,39 @@ RSpec.describe Wild::Hooks::Audit::Logger do
                                                         duration_ms: 1.0)
       expect { logger.record(null_result, {}) }.not_to raise_error
     end
+
+    context "with sensitive context values (f-l01-1)" do
+      it "never writes a raw password into the trail entry" do
+        event = logger.record(result, { password: "hunter2", tool: "bash" })
+
+        expect(event.context_summary).not_to include("hunter2")
+        expect(event.context_summary).to include("[REDACTED]")
+      end
+
+      it "never writes a raw api_key into the trail entry" do
+        event = logger.record(result, { api_key: "sk-live-abc123" })
+
+        expect(event.context_summary).not_to include("sk-live-abc123")
+        expect(event.context_summary).to include("[REDACTED]")
+      end
+
+      it "never writes a raw token into the trail entry" do
+        event = logger.record(result, { token: "eyJabc.def.ghi" })
+
+        expect(event.context_summary).not_to include("eyJabc.def.ghi")
+        expect(event.context_summary).to include("[REDACTED]")
+      end
+
+      it "routes context through a custom sanitizer when one is injected" do
+        custom_sanitizer = Wild::Hooks::Audit::Sanitizer.new(redact_keys: %w[tool])
+        custom_logger = described_class.new(config: config, sanitizer: custom_sanitizer)
+
+        event = custom_logger.record(result, { tool: "bash" })
+
+        expect(event.context_summary).to include("[REDACTED]")
+        expect(event.context_summary).not_to include("bash")
+      end
+    end
   end
 
   describe "#trail" do
