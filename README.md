@@ -7,6 +7,8 @@
 [![codecov](https://codecov.io/gh/jeremylongshore/wild/branch/main/graph/badge.svg)](https://codecov.io/gh/jeremylongshore/wild)
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/wild)](https://github.com/jeremylongshore/wild/releases)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
+
 ## Overview
 
 `wild` is a single Rails engine that lets a Rails app host safe, capability-gated, auditable AI agent operations. Ten cohesive namespaces ship inside one gem so a Rails team can install all of them — or use the ones they need — with a single `bundle add wild` and one `rails g wild:install`.
