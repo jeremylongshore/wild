@@ -17,5 +17,6 @@
 enforce_dependencies: true
 enforce_privacy: true
 dependencies:
-  - "../hooks"
-  - "../analyzers/permission"
+  - "lib/wild/hooks"
+  - "lib/wild/analyzers/permission"
+  - "."

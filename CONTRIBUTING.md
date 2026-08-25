@@ -32,10 +32,7 @@ bundle exec rspec
 # Run lint
 bundle exec rubocop
 
-# Run namespace-boundary lint (boots spec/dummy/; informational — 465
-# pre-existing dependency-declaration violations across the ten
-# lib/wild/<namespace>/package.yml files, see the CI workflow's `boundary`
-# job comment)
+# Run namespace-boundary lint (boots spec/dummy/; enforced)
 bundle exec packwerk check
 
 # Run security gates (brakeman scans spec/dummy/, the dummy Rails app
@@ -105,7 +102,7 @@ new top-level namespace requires an ADR amendment.
    ```
 3. Make your changes
 4. Add or update tests
-5. Ensure `rspec`, `rubocop`, `brakeman`, and `bundler-audit` all pass (`packwerk check` runs against `spec/dummy/` but stays informational: it currently reports 465 pre-existing namespace-dependency violations across the ten `lib/wild/<namespace>/package.yml` files, tracked separately)
+5. Ensure `rspec`, `rubocop`, `packwerk check`, `brakeman`, and `bundler-audit` all pass
 6. Commit with [conventional commit messages](#commit-messages)
 7. Push and open a pull request
 
@@ -242,11 +239,14 @@ is allowed but requires explicit re-engagement with the decision substrate.
 
 #### When Packwerk flags an import
 
-`bundle exec packwerk check` runs in CI (`spec/dummy/` landed, so the lane
-completes instead of crashing, but it stays `continue-on-error: true`: it
-reports 465 pre-existing namespace-dependency violations across the ten
-`lib/wild/<namespace>/package.yml` files, a separate out-of-scope fix).
-**Treat local Packwerk output as binding even while the CI job is informational** — the intentional friction
+`bundle exec packwerk check` runs in CI as a required, blocking check (the
+`boundary` job): every `lib/wild/<namespace>/package.yml` declares its
+dependency on the root package ('.') for the substrate every tier may use
+(`Wild::Error` subclasses, `Wild.config`, `Wild::Configuration`,
+`Wild::Engine`), and the ten `lib/wild/<namespace>.rb` entry files are
+excluded in `packwerk.yml` (same treatment as the five engine-substrate
+files) because they are each namespace's own wiring code, not a genuine
+root-to-namespace coupling. **Treat local Packwerk output as binding** — the intentional friction
 this discipline relies on erodes during the soak window if contributors wait
 for CI to enforce it. Run locally before pushing:
 
@@ -276,7 +276,7 @@ the file's structure.
 ### Code Review
 
 - All PRs require maintainer approval
-- CI must pass (RSpec on Ruby 3.2/3.3/3.4 + RuboCop + brakeman + bundler-audit + Codecov; Packwerk runs but stays informational until the ten `package.yml` dependency gaps close)
+- CI must pass (RSpec on Ruby 3.2/3.3/3.4 + RuboCop + Packwerk + brakeman + bundler-audit + Codecov)
 - Keep PRs focused — one namespace per PR when possible
 
 ## Style Guides

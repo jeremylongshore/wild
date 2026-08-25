@@ -8,10 +8,24 @@
 #
 # Run: bundle exec packwerk check
 #
-# Note: CI marks the Packwerk job `continue-on-error: true` until Role 8
-# lands spec/dummy/ in P2 — Packwerk requires Rails-app context to boot.
-# Locally `bundle exec packwerk check` works when invoked from a host
-# Rails app that mounts Wild::Engine.
+# spec/dummy/ (review wave f-x2-1/f-x2-2) provides that Rails-app context,
+# so `bundle exec packwerk check` runs to completion in CI and locally.
+#
+# The ten `lib/wild/<namespace>.rb` entry files (module definition + a
+# require-aggregation preamble + a handful of `class << self` factory/
+# configuration methods that wire the namespace's own internals together,
+# e.g. Wild::Skillops.build) sit in `lib/wild/` itself, not inside their
+# namespace's own subdirectory, so Packwerk's directory-based package
+# resolution assigns them to the root package ('.') even though they are
+# functionally each namespace's own public surface. They are excluded here
+# for the same reason the five engine-substrate files already were:
+# wiring code that is legitimately allowed to see the namespace it wires,
+# not a Zeitwerk-conformant per-class file. Declaring the edge as a root
+# package.yml dependency instead was considered and rejected: `dependencies:`
+# is package-wide, not per-file, so it would let every other root file
+# (lib/wild.rb, engine.rb, configuration.rb, error.rb, and the other nine
+# entry files) reach into that namespace too, silently widening the ADR-0003
+# graph instead of just unblocking each namespace's own entry point.
 
 include:
   - "lib/wild/**/*.rb"
@@ -24,6 +38,16 @@ exclude:
   - "lib/wild/configuration.rb"
   - "lib/wild/engine.rb"
   - "lib/wild.rb"
+  - "lib/wild/hooks.rb"
+  - "lib/wild/skillops.rb"
+  - "lib/wild/telemetry/collector.rb"
+  - "lib/wild/telemetry/pipeline.rb"
+  - "lib/wild/telemetry/analysis.rb"
+  - "lib/wild/analyzers/permission.rb"
+  - "lib/wild/analyzers/test_flakes.rb"
+  - "lib/wild/capability_gate.rb"
+  - "lib/wild/introspection.rb"
+  - "lib/wild/admin_tools.rb"
 
 # Root + per-namespace packages.
 # Each entry is a glob that matches a directory containing a package.yml.

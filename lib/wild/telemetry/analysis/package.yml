@@ -10,5 +10,6 @@
 enforce_dependencies: true
 enforce_privacy: true
 dependencies:
-  - "../../hooks"
-  - "../pipeline"
+  - "lib/wild/hooks"
+  - "lib/wild/telemetry/pipeline"
+  - "."

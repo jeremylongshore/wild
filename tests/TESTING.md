@@ -79,7 +79,7 @@ phase.
 | L1 | Local git hooks (plain-shell) | Installed; engineer runs `scripts/install-hooks` once per clone | `scripts/git-hooks/{pre-commit,commit-msg,pre-push}`, `scripts/install-hooks` |
 | L1 | Dependabot | Installed | `.github/dependabot.yml` |
 | L2 | RuboCop (+ rails + rspec cops) | Installed, CI-enforced | `.rubocop.yml`, `ci.yml lint` job |
-| L2 | Packwerk (namespace boundary) | Installed; root + **all 10 per-namespace `package.yml` present**; `spec/dummy/` landed so the lane runs to completion, but `boundary` job stays `continue-on-error`: it reports 465 pre-existing namespace-dependency violations across the ten `package.yml` files, a separate out-of-scope fix | `packwerk.yml`, 11× `package.yml`, `spec/dummy/`, `ci.yml boundary` job |
+| L2 | Packwerk (namespace boundary) | Installed, CI-enforced; root + **all 10 per-namespace `package.yml` present**, each declaring the root-substrate dependency; the ten `lib/wild/<namespace>.rb` entry files excluded (same treatment as the five engine-substrate files, see `packwerk.yml`); `bundle exec packwerk check` is 0 offenses | `packwerk.yml`, 11× `package.yml`, `spec/dummy/`, `ci.yml boundary` job |
 | L2 | brakeman | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
 | L2 | bundler-audit | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
 | L3 | RSpec | Installed — **2988 examples / 0 failures across all 10 namespaces**; 98.29% line coverage | `spec/spec_helper.rb`, `.rspec`, `ci.yml test` matrix |

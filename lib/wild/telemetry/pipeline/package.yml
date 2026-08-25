@@ -7,5 +7,6 @@
 enforce_dependencies: true
 enforce_privacy: true
 dependencies:
-  - "../../hooks"
-  - "../collector"
+  - "lib/wild/hooks"
+  - "lib/wild/telemetry/collector"
+  - "."

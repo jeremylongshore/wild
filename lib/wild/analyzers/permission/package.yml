@@ -10,4 +10,5 @@
 enforce_dependencies: true
 enforce_privacy: true
 dependencies:
-  - "../../hooks"
+  - "lib/wild/hooks"
+  - "."
