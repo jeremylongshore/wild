@@ -9,9 +9,21 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
 
+> **Status: 0.0.1 pre-release (not on RubyGems; no tags).** The consolidation build paused
+> 2026-06-02 mid-phase P1 and a strategic review wave opened 2026-08-25
+> (`000-docs/009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md`).
+>
+> **Works today:** the library (`require "wild"`, all ten `Wild::*` namespaces), `Wild.configure`,
+> the per-namespace rake test tasks, the full RSpec suite (3076 examples) and RuboCop in CI.
+>
+> **Not yet:** `rails g wild:install` (stub), the two MCP server binaries (stubs that exit 1;
+> not declared as gem executables), `prompts/` (does not exist), the five-minute stopwatch test,
+> a v0.1.0 release, and the archive of the ten original `wild-*` repos (still un-archived).
+> v0.1.0 cuts only when the stopwatch gate passes (Role 11 of the build plan).
+
 ## Overview
 
-`wild` is a single Rails engine that lets a Rails app host safe, capability-gated, auditable AI agent operations. Ten cohesive namespaces ship inside one gem so a Rails team can install all of them — or use the ones they need — with a single `bundle add wild` and one `rails g wild:install`.
+`wild` is a single Rails engine that lets a Rails app host safe, capability-gated, auditable AI agent operations. Ten cohesive namespaces ship inside one gem so a Rails team can install all of them — or use the ones they need — with a single `bundle add wild` and one `rails g wild:install` (the generator is the P2 deliverable; see the status block above).
 
 The namespaces:
 
@@ -32,7 +44,7 @@ The namespaces:
 
 This repo consolidates ten previously-separate gems (`jeremylongshore/wild-*`) into one Rails engine after a seven-seat adversarial thinker council unanimously rejected the ten-gem topology. The canonical decision record is [`000-docs/adr/ADR-0001-topology.md`](000-docs/adr/ADR-0001-topology.md). The decision to defer separate-gem extraction until a real external consumer with divergent cadence appears is [`000-docs/adr/ADR-0002-namespace-extraction-policy.md`](000-docs/adr/ADR-0002-namespace-extraction-policy.md).
 
-The ten original repos are archived with redirect READMEs pointing here. Their git histories remain readable for archaeology.
+The ten original repos are **not yet archived**; per ADR-0001 they get archived with redirect READMEs pointing here at the end of the build (phase P4). Their git histories remain readable for archaeology.
 
 ## Getting Started
 
@@ -45,11 +57,11 @@ gem "wild"
 
 ```bash
 bundle install
-bin/rails g wild:install
+bin/rails g wild:install   # PLANNED (P2): today this generator is a stub
 bin/rails server
 ```
 
-The install generator creates:
+The install generator will create:
 - `config/initializers/wild.rb` — single configuration block (no per-namespace classes)
 - `config/wild/access_policy.yml` — introspection access policy
 - `config/wild/capabilities.yml` — capability-gate rules
@@ -61,21 +73,18 @@ The DHH council verdict locked one non-negotiable: from a brand-new Rails 7.1 ap
 
 ## Usage
 
-### MCP servers
+### MCP servers (planned, P2)
 
-Two MCP servers ship as `bin/` scripts so non-Rails consumers can use them through plain MCP transports:
+Two MCP servers are planned to ship as `bin/` scripts so non-Rails consumers can use them through plain MCP transports:
 
 - `bin/wild-mcp-introspection` — wraps `Wild::Introspection`
 - `bin/wild-mcp-admin` — wraps `Wild::AdminTools`
 
-Each registers versioned tool descriptions under `prompts/` so prompt changes flow through code review (Karpathy seam, council-mandated).
+Today both files are stubs that print a pending notice and `exit 1`; they are deliberately not declared as gem executables until they work. The in-process server factories (`Wild::Introspection::Server`, `Wild::AdminTools::Server`) exist and are covered by specs. Versioned tool descriptions under `prompts/` (the Karpathy seam) are also planned, not shipped.
 
-### CLI analyzers
+### Analyzers
 
-```bash
-bundle exec wild analyzers:permission --model User
-bundle exec wild analyzers:test-flakes --suite spec/
-```
+`Wild::Analyzers::Permission` and `Wild::Analyzers::TestFlakes` are library APIs (see their specs under `spec/wild/analyzers/`). There is no `wild` command-line executable yet.
 
 ### Configuration
 
@@ -117,7 +126,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full setup.
 
 ## Documentation
 
-Project documentation lives in [`000-docs/`](000-docs/):
+Project documentation lives in [`000-docs/`](000-docs/); the site-map is
+[`000-docs/000-INDEX.md`](000-docs/000-INDEX.md).
 
 | Doc | Purpose |
 |-----|---------|
@@ -126,9 +136,13 @@ Project documentation lives in [`000-docs/`](000-docs/):
 | [Architecture](000-docs/003-AT-ARCH-architecture.md) | Engine shape, namespace layout, boundary discipline |
 | [User Journey](000-docs/004-PP-UJRN-user-journey.md) | Rails developer adoption flow |
 | [Technical Spec](000-docs/005-AT-SPEC-technical-spec.md) | Stack, schemas, MCP transports |
-| [Status](000-docs/006-OD-STAT-status.md) | Build progress against the 4-week plan |
+| [Status](000-docs/006-OD-STAT-status.md) | Build progress against the 11-role plan |
+| [CodeQL strategy](000-docs/007-AT-STND-codeql-strategy.md) | `security-extended` on ruby + actions |
+| [Pre-move coupling survey](000-docs/008-AT-AUDT-pre-move-coupling-survey.md) | Static coupling audit of the ten old gems |
+| [Review-wave plan](000-docs/009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md) | Plan of record for the 2026-08-25 review interlude |
 | [ADR-0001](000-docs/adr/ADR-0001-topology.md) | One gem, ten namespaces — council-blessed |
 | [ADR-0002](000-docs/adr/ADR-0002-namespace-extraction-policy.md) | When a namespace earns its own gemspec |
+| [ADR-0003](000-docs/adr/ADR-0003-namespace-dependency-graph.md) | Four-tier namespace dependency DAG (Packwerk) |
 
 ## Security
 
