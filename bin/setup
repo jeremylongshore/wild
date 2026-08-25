@@ -12,6 +12,7 @@ echo
 echo "  bundle exec rspec                 # full test suite"
 echo "  bundle exec rake test:<namespace> # one namespace"
 echo "  bundle exec rubocop               # style"
+echo "  bundle exec packwerk validate      # package.yml manifest sanity"
 echo "  bundle exec packwerk check        # namespace boundary"
-echo "  bundle exec brakeman              # security"
+echo "  bundle exec brakeman --force -p . --skip-files spec/  # security"
 echo "  bundle exec bundler-audit check --update"

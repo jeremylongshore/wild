@@ -8,7 +8,6 @@
 # Wild::CapabilityGate so the two cannot drift on wildcard matching.
 
 enforce_dependencies: true
-enforce_privacy: true
 dependencies:
   - "lib/wild/hooks"
   - "."

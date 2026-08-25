@@ -45,8 +45,9 @@ bundle install
 bundle exec rspec                          # full suite
 bundle exec rake test:<namespace>          # one namespace
 bundle exec rubocop                        # style
+bundle exec packwerk validate               # package.yml manifest sanity
 bundle exec packwerk check                 # namespace boundary
-bundle exec brakeman -p spec/dummy         # security
+bundle exec brakeman --force -p . --skip-files spec/  # security (scans lib/, not the dummy app)
 bundle exec bundler-audit check --update   # dependencies
 ```
 

@@ -33,11 +33,14 @@ bundle exec rspec
 bundle exec rubocop
 
 # Run namespace-boundary lint (boots spec/dummy/; enforced)
+bundle exec packwerk validate    # manifest sanity (malformed package.yml keys, etc.)
 bundle exec packwerk check
 
-# Run security gates (brakeman scans spec/dummy/, the dummy Rails app
-# Wild::Engine mounts into)
-bundle exec brakeman -p spec/dummy
+# Run security gates (brakeman scans the real gem source under lib/, not
+# spec/dummy/, which has 0 controllers/models and nothing brakeman treats
+# as app code to scan; --force keeps it in Rails-app-aware mode despite
+# the missing app/ tree)
+bundle exec brakeman --force -p . --skip-files spec/
 bundle exec bundler-audit check --update
 ```
 
@@ -102,7 +105,7 @@ new top-level namespace requires an ADR amendment.
    ```
 3. Make your changes
 4. Add or update tests
-5. Ensure `rspec`, `rubocop`, `packwerk check`, `brakeman`, and `bundler-audit` all pass
+5. Ensure `rspec`, `rubocop`, `packwerk validate`, `packwerk check`, `brakeman`, and `bundler-audit` all pass
 6. Commit with [conventional commit messages](#commit-messages)
 7. Push and open a pull request
 
@@ -185,13 +188,21 @@ module Wild
 end
 ```
 
-A consumer calling a `# @api private` symbol gets no Ruby runtime error, but
-**Packwerk's `enforce_privacy: true`** (set in every namespace's `package.yml`,
-per ADR-0003) flags cross-namespace reads of these symbols at
-`bundle exec packwerk check` time. The YARD tag is the contract; Packwerk is
-the gate. Within-namespace use is unrestricted; cross-namespace use fails
-CI's boundary job. Breakage between releases for `# @api private` symbols is
-expected — they exist outside the public contract by design.
+A consumer calling a `# @api private` symbol gets no Ruby runtime error, and
+**Packwerk does not enforce this tag today** (review-wave finding f-x2-2):
+`enforce_privacy` is a real Packwerk core concept, but `bundle exec packwerk
+validate` fails on the plain `packwerk` gem this repo depends on because that
+key moved to the separate `packwerk-extensions` gem, which is not a
+dependency here. So `# @api private` is convention, not a CI-enforced
+boundary: `bundle exec packwerk check` only fails on cross-*namespace*
+dependencies that violate the ADR-0003 graph, never on a cross-namespace
+read of a symbol tagged private within an otherwise-allowed namespace.
+Within-namespace use is unrestricted; cross-namespace use of a `# @api
+private` symbol is a code-review catch, not a CI failure, until someone
+adds `packwerk-extensions` and wires `enforce_privacy` for real. Breakage
+between releases for `# @api private` symbols is still expected: they are
+documented as outside the public contract by design, just not machine-gated
+yet.
 
 #### When you want to add a public API symbol
 
@@ -239,18 +250,25 @@ is allowed but requires explicit re-engagement with the decision substrate.
 
 #### When Packwerk flags an import
 
-`bundle exec packwerk check` runs in CI as a required, blocking check (the
-`boundary` job): every `lib/wild/<namespace>/package.yml` declares its
-dependency on the root package ('.') for the substrate every tier may use
-(`Wild::Error` subclasses, `Wild.config`, `Wild::Configuration`,
-`Wild::Engine`), and the ten `lib/wild/<namespace>.rb` entry files are
-excluded in `packwerk.yml` (same treatment as the five engine-substrate
-files) because they are each namespace's own wiring code, not a genuine
-root-to-namespace coupling. **Treat local Packwerk output as binding** — the intentional friction
-this discipline relies on erodes during the soak window if contributors wait
-for CI to enforce it. Run locally before pushing:
+`bundle exec packwerk validate` and `bundle exec packwerk check` both run in
+CI as required, blocking checks (the `boundary` job): every
+`lib/wild/<namespace>/package.yml` declares its dependency on the root
+package ('.') for the substrate every tier may use (`Wild::Error`
+subclasses, `Wild.config`, `Wild::Configuration`, `Wild::Engine`): those
+live in the five engine-substrate files, which are themselves governed by
+Packwerk (not excluded), so the "." edge is a real, checked dependency. The
+ten `lib/wild/<namespace>.rb` entry files remain excluded in `packwerk.yml`
+because they are each namespace's own wiring code, structurally stuck in
+the root package by Ruby's file-per-module convention, not a genuine
+root-to-namespace coupling; this is a documented, known enforcement hole
+(see `packwerk.yml`'s "KNOWN ENFORCEMENT HOLE" comment): a boundary
+violation reachable only through one of those ten entry points will not be
+caught. **Treat local Packwerk output as binding**: the intentional
+friction this discipline relies on erodes during the soak window if
+contributors wait for CI to enforce it. Run locally before pushing:
 
 ```bash
+bundle exec packwerk validate
 bundle exec packwerk check
 ```
 

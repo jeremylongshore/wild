@@ -19,7 +19,10 @@ require "wild"
 
 module Dummy
   class Application < Rails::Application
-    config.load_defaults 8.1
+    # Matches wild.gemspec's `rails >= 7.1` floor: load_defaults must never
+    # exceed the minimum Rails version the gem claims to support, or CI
+    # would pass on a config surface real 7.1 consumers can't reach.
+    config.load_defaults 7.1
 
     # Wild::Engine is mounted for routing coverage only; no app/ tree of
     # our own to eager-load.
@@ -28,15 +31,19 @@ module Dummy
 
     config.hosts.clear if config.respond_to?(:hosts)
 
-    # Rails::Application#find_root walks up from this file looking for a
-    # Gemfile and stops at the repo root (spec/dummy has none of its own) —
-    # so `Rails.root` is the gem root, not spec/dummy/. That's required for
-    # Packwerk (below): its Zeitwerk-derived autoload paths must fall under
-    # Rails.root to be recognized. It does mean the handful of Rails::Paths
-    # that are conventionally dummy-app-relative need pointing back at
-    # spec/dummy/ explicitly.
+    # Rails::Application#find_root (railties' application.rb) walks up from
+    # the caller looking for a config.ru, not a Gemfile, defaulting to
+    # Dir.pwd if none is found; this repo has no config.ru anywhere in its
+    # tree, so without this line Rails.root is Dir.pwd by coincidence of
+    # where `bundle exec` happens to run from, not by anything find_root
+    # actually resolved. Pinning it here makes the gem root authoritative
+    # regardless of invocation cwd. That's required for Packwerk (below):
+    # its Zeitwerk-derived autoload paths must fall under Rails.root to be
+    # recognized. It does mean the handful of Rails::Paths that are
+    # conventionally dummy-app-relative need pointing back at spec/dummy/
+    # explicitly.
+    config.root = File.expand_path("../../..", __dir__)
     config.paths["config/routes.rb"] = "spec/dummy/config/routes.rb"
-    config.paths["config/database"] = "spec/dummy/config/database.yml"
     config.paths["log"] = "spec/dummy/log/#{Rails.env}.log"
     config.paths["tmp"] = "spec/dummy/tmp"
 

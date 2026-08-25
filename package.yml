@@ -10,5 +10,4 @@
 # inherits it; it depends on no namespace.
 
 enforce_dependencies: true
-enforce_privacy: false # engine substrate is intentionally public to all namespaces
 dependencies: []
