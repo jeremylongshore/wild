@@ -79,13 +79,13 @@ phase.
 | L1 | Local git hooks (plain-shell) | Installed; engineer runs `scripts/install-hooks` once per clone | `scripts/git-hooks/{pre-commit,commit-msg,pre-push}`, `scripts/install-hooks` |
 | L1 | Dependabot | Installed | `.github/dependabot.yml` |
 | L2 | RuboCop (+ rails + rspec cops) | Installed, CI-enforced | `.rubocop.yml`, `ci.yml lint` job |
-| L2 | Packwerk (namespace boundary) | Installed; root + **all 10 per-namespace `package.yml` present**; `boundary` job `continue-on-error` until `spec/dummy/` lands (P2) | `packwerk.yml`, 11× `package.yml`, `ci.yml boundary` job |
+| L2 | Packwerk (namespace boundary) | Installed; root + **all 10 per-namespace `package.yml` present**; `spec/dummy/` landed so the lane runs to completion, but `boundary` job stays `continue-on-error`: it reports 465 pre-existing namespace-dependency violations across the ten `package.yml` files, a separate out-of-scope fix | `packwerk.yml`, 11× `package.yml`, `spec/dummy/`, `ci.yml boundary` job |
 | L2 | brakeman | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
 | L2 | bundler-audit | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
 | L3 | RSpec | Installed — **2988 examples / 0 failures across all 10 namespaces**; 98.29% line coverage | `spec/spec_helper.rb`, `.rspec`, `ci.yml test` matrix |
 | L3 | SimpleCov + Cobertura | Installed (gated by `COVERAGE=1`); `minimum_coverage 85` enforced; `minimum_coverage_by_file 75` still commented (P1 — lift-able) | `spec/spec_helper.rb` |
 | L3 | Codecov upload | Installed; **`CODECOV_TOKEN` set 2026-05-30**; 9 per-component status checks live | `ci.yml test` job, `codecov.yml` |
-| L4 | spec/dummy/ Rails app | ABSENT (P2 — Role 8) | (gap — keeps boundary+brakeman informational) |
+| L4 | spec/dummy/ Rails app | Installed (review-wave f-x2-1/f-x2-2); minimal host app mounting `Wild::Engine` at `/wild` for Packwerk + brakeman + `spec/engine/engine_spec.rb` | `spec/dummy/` |
 | L5 | CodeQL (`security-extended`) | Installed — **merged to main (PR #6, 2026-05-29)**; runs on PRs | `.github/workflows/codeql.yml` |
 | L6 | Cucumber / .feature files | ABSENT (waived) | n/a |
 | L7 | UAT lifecycle | ABSENT (waived) | n/a |

@@ -107,7 +107,7 @@ end
 bundle install
 bundle exec rspec
 bundle exec rubocop
-bundle exec packwerk check
+bundle exec packwerk check   # boots spec/dummy/; informational (see CONTRIBUTING.md)
 ```
 
 Per-namespace test tasks:

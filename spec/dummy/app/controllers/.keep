@@ -1,0 +1,3 @@
+# Placeholder. Brakeman (`bundle exec brakeman -p spec/dummy`) requires an
+# app/ directory to recognize spec/dummy as a Rails application; Wild::Engine
+# has no controllers of its own yet (Roles 7-11, not started).
