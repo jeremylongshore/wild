@@ -69,5 +69,4 @@ ignore:
   - "bin/**/*"
   - "lib/generators/**/*"
   - "000-docs/**/*"
-  - "schemas/**/*"
   - "prompts/**/*"
