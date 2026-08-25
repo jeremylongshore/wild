@@ -690,8 +690,19 @@ section splits into a separate file.
   50, `health_stale_threshold_hours` 24, `allowed_lifecycle_states`
   [:draft, :active, :deprecated, :retired], `allowed_health_states`
   [:available, :degraded, :unavailable, :unknown]). Defaults preserved
-  verbatim. The F5 README/doc downgrade (removing the "atomic" / "durable"
-  claims Lamport flagged) remains a separate Role 6 bead — `wild-rvv.8.1`.
+  verbatim.
+- **F5 doc downgrade landed** (review wave, finding f-l07-1): `Registry::Store`'s
+  class comment no longer claims "atomic read/write access." It now states the
+  actual guarantee: single-process, non-concurrent, no atomicity/durability/
+  thread-safety beyond plain Ruby `Hash` semantics, and names the unguarded
+  check-then-set race in `#add` (f-l07-2) instead of implying it is safe.
+  `tests/RTM.md` REQ-006 moves from Uncovered to Partial with a spec citation.
+  The "Concurrent-style sequential updates" spec is renamed to "Rapid
+  sequential updates (single caller, no threads)" (f-l07-4) since it never
+  used a `Thread`. `Wild.config.skillops.enabled` remaining a no-op gate
+  (f-l07-3) is a separate, still-open owner decision, not touched here.
+  Advances bead "F5: Downgrade Wild::Skillops claims to match what the code
+  can actually back up" (the `enabled` gate remains open).
 - **F1 + MIN-Armstrong applied** — deleted the old gem's `version.rb` (one
   `Wild::VERSION` at gem level); collapsed the 7-class error tree into 6
   subclasses under `Wild::Skillops::Error` (`ValidationError`,
@@ -705,8 +716,10 @@ section splits into a separate file.
 - Export pair (`json_exporter` + `markdown_exporter`) retained in this PR
   to preserve test coverage during the structure move — the F6 wire-or-
   delete audit lives at `wild-rvv.8.3` and stays open.
-- Closes `wild-rvv.8` base move. Children `wild-rvv.8.1` (F5 doc downgrade),
-  `wild-rvv.8.2` (F10 BDUF cutback), `wild-rvv.8.3` (F6 exporter audit)
-  remain open as Role 6 + Role 7 behavior follow-ups.
+- Closes `wild-rvv.8` base move. Child `wild-rvv.8.1` (F5 doc downgrade) is
+  now advanced by the `Registry::Store` comment fix above (the `enabled`
+  gate itself remains open, see f-l07-3). `wild-rvv.8.2` (F10 BDUF cutback)
+  and `wild-rvv.8.3` (F6 exporter audit) remain open as Role 6 + Role 7
+  behavior follow-ups.
 
 [Unreleased]: https://github.com/jeremylongshore/wild/compare/v0.0.0...HEAD

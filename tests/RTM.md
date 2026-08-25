@@ -2,7 +2,7 @@
 
 > Engineer-owned MoSCoW tags. AI must not lower a `MUST` to `SHOULD`/`COULD`/`WON'T` without explicit engineer override.
 
-**Last rebuild:** 2026-05-28
+**Last rebuild:** 2026-08-25 (REQ-006 hand-edited to reflect the review-wave f-l07-1/f-l07-2 fix; the rest of the table was not machine-rebuilt on this date)
 **Source documents:**
 - `000-docs/002-PP-PRD-product-requirements.md` (FR-1..9, NFR-1..7)
 - `/home/jeremy/000-projects/wild/wild-rails-ai-ops/000-docs/013-AT-AUDT-thinker-council-verdict-rev2-2026-05-29.md` (F1..F10, MIN-Kleppmann, MIN-Karpathy, MIN-Armstrong)
@@ -14,7 +14,7 @@
 
 | MoSCoW tier | Total | Covered by test | Uncovered |
 |---|---|---|---|
-| MUST | 14 | 1 | 13 (all P1 deliverables — Role 5 onwards) |
+| MUST | 14 | 2 | 12 (all P1 deliverables — Role 5 onwards) |
 | SHOULD | 8 | 0 | 8 |
 | COULD | 4 | 0 | 4 (deferred — v0.2+) |
 | WON'T | 5 | n/a | excluded |
@@ -28,7 +28,7 @@
 | REQ-003 | Every `CapabilityGate` `rescue` emits a structured audit event; `:evaluation_error` is hard-fail | F2 | wild-rvv.4.1 | (none — `spec/wild/capability_gate/audit_liveness_spec.rb` is a Role 6 deliverable) | **Uncovered — Role 6 P1** |
 | REQ-004 | Judgment tests, not vanity counts | F3 | wild-rvv.7.1 | (none — F3 is a discipline policy, enforced by PR template + CHANGELOG) | **Discipline declared in `tests/TESTING.md`; per-namespace assertions land with Role 5/7** |
 | REQ-005 | Shared `schemas/wildcard_corpus.yml` matches identically in permission analyzer and capability gate | F4 | wild-rvv.1.2 | (none — Role 4/6 P1) | **Uncovered** |
-| REQ-006 | Downgrade `Wild::Skillops` claims to match what code can back up (no atomicity/durability claims) | F5 | wild-rvv.8.1 | (none — doc-trim + code-trim) | **Uncovered — Role 5 + Role 3 re-engage P1/P2** |
+| REQ-006 | Downgrade `Wild::Skillops` claims to match what code can back up (no atomicity/durability claims) | F5 | wild-rvv.8.1 | `store_spec.rb` (comment-truth check only; no behavioral Skillops concurrency spec exists) | **Partial — `registry/store.rb` comment now states actual guarantees (review wave f-l07-1/f-l07-2); `Wild.config.skillops.enabled` gating a no-op (f-l07-3) is still open, owner decision pending** |
 | REQ-007 | `Wild::Error` base hierarchy with consumer-distinguishable subclasses | MIN-Armstrong | wild-rvv.1.3 | (none — `spec/engine/error_spec.rb` is a Role 5 deliverable; only the base class skeleton exists in `lib/wild/error.rb`) | **Skeleton only** |
 | REQ-008 | `bin/wild-mcp-introspection` + `bin/wild-mcp-admin` ship as `bin/` scripts (not separate gems) with versioned `prompts/<tool>.md` + `schemas/<tool>.yml` | MIN-Karpathy | wild-rvv.2.1 | (none — stub `bin/` scripts exit 1 with pending message) | **Uncovered — Role 9 P2** |
 | REQ-009 | `rails g wild:install` writes 3 config files + mounts engine; works under 5-minute stopwatch | F9 + DHH non-negotiable | wild-rvv.9.1 | (none — generator stub only) | **Uncovered — Role 8 P2** |
