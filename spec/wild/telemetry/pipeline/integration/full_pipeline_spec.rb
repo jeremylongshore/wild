@@ -107,6 +107,28 @@ RSpec.describe "Full pipeline integration" do
       expect(exported).not_to include("10.1.2.3")
       expect(exported).to include("\"redacted\":true")
     end
+
+    it "redacts a JSON-quoted secret in the adapter's own tool_use content shape " \
+       "end to end (f-l03-2)" do
+      # ClaudeCodeAdapter#extract_tool_use_content builds turn content as
+      # "name(#{JSON.generate(input)})", so a tool_use with a secret in
+      # `input` puts that secret into content as JSON-quoted text
+      # (`"api_key":"..."`), not the bare `api_key=...` shape the content
+      # filter's key-anchored patterns matched before this fix. The same
+      # `input` also lands in turn metadata (already covered by f-l03-1's
+      # MetadataRedactor), so this asserts neither export surface leaks it.
+      line = {
+        type: "tool_use",
+        name: "deploy",
+        input: { "api_key" => "sk_live_abcdefghijklmnop" }
+      }.to_json
+
+      transcripts = Wild::Telemetry::Pipeline.process(line, adapter: adapter, source_id: "session-json-secret")
+      exported = json_exporter.export(transcripts)
+
+      expect(exported).not_to include("sk_live_abcdefghijklmnop")
+      expect(exported).to include("[REDACTED]")
+    end
   end
 
   describe "MCP log pipeline" do
