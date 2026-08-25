@@ -11,27 +11,32 @@ RSpec.describe Wild::Telemetry::Collector::Store::RetentionManager do
   let(:store_path) { File.join(tmpdir, "events.jsonl") }
   let(:store) { Wild::Telemetry::Collector::Store::JsonLinesStore.new(path: store_path) }
 
-  # old_envelope has a received_at that is ~108 days before 2026-03-19,
-  # well outside a 90-day retention window.
+  # Timestamps are computed relative to now so the fixtures never age past the
+  # 90-day retention window (a hardcoded 2026-03-19 "recent" fixture expired on
+  # 2026-06-17 and turned 6 examples red). old_envelope sits 120 days back,
+  # well outside the window; new_envelope sits 1 day back, well inside it.
+  let(:old_received_at) { (Time.now.utc - (120 * 86_400)).iso8601(3) }
+  let(:new_received_at) { (Time.now.utc - 86_400).iso8601(3) }
+
   let(:old_envelope) do
     Wild::Telemetry::Collector::Schema::EventEnvelope.new(
       event_type: "action.completed",
-      timestamp: "2025-12-01T00:00:00.000Z",
+      timestamp: old_received_at,
       caller_id: "test",
       action: "old_action",
       outcome: "success",
-      received_at: "2025-12-01T00:00:00.000Z"
+      received_at: old_received_at
     )
   end
 
   let(:new_envelope) do
     Wild::Telemetry::Collector::Schema::EventEnvelope.new(
       event_type: "action.completed",
-      timestamp: "2026-03-19T00:00:00.000Z",
+      timestamp: new_received_at,
       caller_id: "test",
       action: "new_action",
       outcome: "success",
-      received_at: "2026-03-19T00:00:00.000Z"
+      received_at: new_received_at
     )
   end
 
