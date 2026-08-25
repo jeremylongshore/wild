@@ -25,12 +25,20 @@ module Wild
 
         delegate :register_executor, to: :@pipeline
 
-        # No delegation for :two_phase. Delegating it would hand any holder of
-        # this object a way to mint a nonce and call TwoPhaseFlow#confirm_and_execute
-        # directly, bypassing Pipeline#call's allowlist, rate limit, and blast-radius
-        # checks and this class's own audit wrapper (finding f-l10-4, review wave
-        # 2026-08-25). Nothing in lib needs it: #call is the only sanctioned entry
-        # point for both preview and confirm.
+        # No delegation for :two_phase, and Guard::Pipeline never exposes a
+        # reader for it either way (see pipeline.rb). This removes an unused
+        # PUBLIC handle, not a security boundary against in-process code: any
+        # object already holding a reference to @pipeline (or to an executor)
+        # inside this gem's own process is trusted code, not an external
+        # caller, and could always reach TwoPhaseFlow/executor methods
+        # directly via instance_variable_get regardless of what this class
+        # delegates. What #call/#delegate control is the PUBLIC surface every
+        # untrusted caller (an MCP client via ToolHandler) is limited to:
+        # #call is the only entry point that runs the allowlist, param
+        # validation, rate limit, blast-radius checks, and this class's audit
+        # wrapper before a mutation reaches an executor (finding f-l10-4,
+        # review wave 2026-08-25; wording corrected, security-review
+        # follow-up on f-l10-4, PR #73).
       end
     end
   end

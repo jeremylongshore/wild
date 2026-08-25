@@ -60,6 +60,18 @@ RSpec.describe Wild::AdminTools::Guard::RateLimiter do
         expect(result[:allowed]).to be(true)
       end
     end
+
+    context "when rate_limit is missing or malformed (defense in depth, f-l10-6 follow-up)" do
+      it "returns allowed: false with an explicit reason instead of raising" do
+        bad_config = { "operation" => "read", "rate_limit" => nil }
+
+        expect { limiter.check("agent:1", "bad_action", bad_config, global_limits) }.not_to raise_error
+        result = limiter.check("agent:1", "bad_action", bad_config, global_limits)
+
+        expect(result[:allowed]).to be(false)
+        expect(result[:reason]).to eq("missing_or_invalid_rate_limit")
+      end
+    end
   end
 end
 

@@ -181,6 +181,32 @@ module Wild
         def valid_policy_config
           Wild::AdminTools::Guard::PolicyConfig.from_hash(valid_policy_hash)
         end
+
+        # A mutate_destructive action that omits rate_limit, blast_radius_cap,
+        # and nonce_ttl_seconds so it must inherit all three from `defaults`
+        # (PolicyConfig::INHERITABLE_ACTION_KEYS). Shared by every spec that
+        # exercises the defaults-inheritance path (finding f-l10-6) instead of
+        # each redefining the same literal (security-review follow-up on
+        # f-l10-6, PR #73).
+        def sparse_action
+          {
+            "name" => "purge_all_jobs",
+            "operation" => "mutate_destructive",
+            "requires_confirmation" => true
+            # rate_limit / blast_radius_cap / nonce_ttl_seconds intentionally
+            # absent: the action must inherit them from `defaults`.
+          }
+        end
+
+        def hash_with_sparse_action
+          valid_policy_hash.tap do |h|
+            h["action_categories"]["background_jobs"]["actions"] << sparse_action
+          end
+        end
+
+        def sparse_policy_config
+          Wild::AdminTools::Guard::PolicyConfig.from_hash(hash_with_sparse_action)
+        end
       end
     end
   end

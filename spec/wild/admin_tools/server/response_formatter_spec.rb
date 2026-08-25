@@ -141,6 +141,45 @@ RSpec.describe Wild::AdminTools::Server::ResponseFormatter do
       end
     end
 
+    context "with a success result whose metadata carries an audit-only key (f-l10-6 follow-up)" do
+      # Result::AUDIT_ONLY_METADATA_KEYS is stripped from every status, not
+      # just :denied, so an audit-only key can never leak regardless of which
+      # result shape it ends up attached to.
+      let(:result) do
+        Wild::AdminTools::Result.new(
+          status: :success,
+          action: "inspect_job",
+          operation: "read",
+          data: { job_id: "j1" },
+          metadata: { duration_ms: 1.5, internal_reason: "should_never_leak" }
+        )
+      end
+
+      it "strips the audit-only key from success metadata" do
+        body = described_class.format(result).structured_content
+        expect(body[:metadata]).not_to have_key(:internal_reason)
+        expect(body[:metadata][:duration_ms]).to eq(1.5)
+      end
+    end
+
+    context "with a preview result whose metadata carries an audit-only key (f-l10-6 follow-up)" do
+      let(:result) do
+        Wild::AdminTools::Result.new(
+          status: :preview,
+          action: "retry_job",
+          operation: "mutate",
+          data: { will_retry: true },
+          metadata: { nonce: "wnc_abc123", internal_reason: "should_never_leak" }
+        )
+      end
+
+      it "strips the audit-only key from preview metadata" do
+        body = described_class.format(result).structured_content
+        expect(body[:metadata]).not_to have_key(:internal_reason)
+        expect(body[:metadata][:nonce]).to eq("wnc_abc123")
+      end
+    end
+
     context "with an error result" do
       let(:result) do
         Wild::AdminTools::Result.new(

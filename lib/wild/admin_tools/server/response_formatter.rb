@@ -50,7 +50,7 @@ module Wild
             data: result.data,
             before_snapshot: result.before_snapshot,
             after_snapshot: result.after_snapshot,
-            metadata: result.metadata
+            metadata: strip_audit_only(result.metadata)
           }.compact
         end
 
@@ -60,22 +60,19 @@ module Wild
             action: result.action,
             operation: result.operation,
             data: result.data,
-            metadata: result.metadata
+            metadata: strip_audit_only(result.metadata)
           }.compact
         end
 
         def self.denied_hash(result)
-          # :internal_reason (set by TwoPhaseFlow's nonce denial path, see
-          # nonce_manager.rb's Security Decision 8 doc comment) is audit-only:
-          # it discriminates not_found/expired/already_used/mismatch and must
-          # never reach the client, which only ever sees the opaque :reason.
-          # Every other denial's metadata (rate_limited's retry_after_seconds,
+          # Every denial's metadata (rate_limited's retry_after_seconds,
           # blast_radius's estimated_count/cap, parameter validation's errors)
-          # is intentionally client-facing and stays in the splat.
+          # is intentionally client-facing and stays in the splat; only
+          # Result::AUDIT_ONLY_METADATA_KEYS is stripped.
           {
             status: "denied",
             action: result.action,
-            **result.metadata.except(:internal_reason)
+            **strip_audit_only(result.metadata)
           }
         end
 
@@ -87,7 +84,16 @@ module Wild
           }
         end
 
-        private_class_method :success_hash, :preview_hash, :denied_hash, :error_hash
+        # Applied to every status's metadata, not just :denied, so an
+        # audit-only key (currently just :internal_reason, set today by
+        # TwoPhaseFlow's nonce denial path) can never reach the client
+        # regardless of which result status it ends up attached to
+        # (security-review follow-up on f-l10-6, PR #73).
+        def self.strip_audit_only(metadata)
+          metadata.except(*Result::AUDIT_ONLY_METADATA_KEYS)
+        end
+
+        private_class_method :success_hash, :preview_hash, :denied_hash, :error_hash, :strip_audit_only
       end
     end
   end
