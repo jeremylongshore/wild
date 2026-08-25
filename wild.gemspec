@@ -41,7 +41,10 @@ Gem::Specification.new do |spec|
   end
 
   spec.bindir        = "bin"
-  spec.executables   = %w[wild-mcp-introspection wild-mcp-admin]
+  # No executables yet. bin/wild-mcp-{introspection,admin} are stubs that
+  # exit 1; they are declared here only once they work (P2, Role 9 — bead
+  # "Ship plugins/wild/ marketplace-portable plugin wrapping the two MCP servers").
+  spec.executables   = []
   spec.require_paths = ["lib"]
 
   # Runtime
