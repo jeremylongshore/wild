@@ -28,7 +28,8 @@ module Wild
         end
 
         def nonce_store
-          pipeline.instance_variable_get(:@audited_pipeline).two_phase.nonce_manager.store
+          guard_pipeline = pipeline.instance_variable_get(:@audited_pipeline).instance_variable_get(:@pipeline)
+          guard_pipeline.send(:two_phase).nonce_manager.store
         end
 
         def expire_nonce!(nonce)

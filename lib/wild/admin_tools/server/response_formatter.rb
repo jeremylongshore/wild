@@ -65,10 +65,17 @@ module Wild
         end
 
         def self.denied_hash(result)
+          # :internal_reason (set by TwoPhaseFlow's nonce denial path, see
+          # nonce_manager.rb's Security Decision 8 doc comment) is audit-only:
+          # it discriminates not_found/expired/already_used/mismatch and must
+          # never reach the client, which only ever sees the opaque :reason.
+          # Every other denial's metadata (rate_limited's retry_after_seconds,
+          # blast_radius's estimated_count/cap, parameter validation's errors)
+          # is intentionally client-facing and stays in the splat.
           {
             status: "denied",
             action: result.action,
-            **result.metadata
+            **result.metadata.except(:internal_reason)
           }
         end
 

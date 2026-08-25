@@ -44,7 +44,12 @@ module Wild
             confirmation_nonce: ctx.nonce,
             gate_result: extract_gate_result(ctx.session_context),
             outcome: result.status.to_s,
-            denial_reason: result.denied? ? result.metadata[:reason] : nil,
+            # Prefer the internal reason (nonce not_found/expired/already_used/
+            # mismatch) when present so the audit trail keeps full fidelity even
+            # though the client-facing :reason is deliberately opaque
+            # (Security Decision 8, see guard/nonce_manager.rb). Other denial
+            # paths never set :internal_reason, so this falls back to :reason.
+            denial_reason: result.denied? ? (result.metadata[:internal_reason] || result.metadata[:reason]) : nil,
             before_snapshot: result.before_snapshot,
             after_snapshot: result.after_snapshot,
             duration_ms: duration_ms

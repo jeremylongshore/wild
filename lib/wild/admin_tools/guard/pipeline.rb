@@ -14,8 +14,6 @@ module Wild
           @executors = executors
         end
 
-        attr_reader :two_phase
-
         def call(action_name, params, caller_id, nonce: nil)
           catch(:result) { process(action_name, params, caller_id, nonce) }
         end
@@ -25,6 +23,13 @@ module Wild
         end
 
         private
+
+        # Intentionally not public: TwoPhaseFlow#confirm_and_execute mutates state
+        # directly and must only ever be reached through #process below, which
+        # enforces the allowlist, param validation, rate limit, and blast-radius
+        # checks first. See finding f-l10-4 (review wave 2026-08-25). Test-only
+        # cleanup code reaches this via `send(:two_phase)`.
+        attr_reader :two_phase
 
         def process(action_name, params, caller_id, nonce)
           config = check_allowlist!(action_name)

@@ -38,7 +38,8 @@ RSpec.describe "MCP Server end-to-end lifecycle" do
   end
 
   after do
-    pipeline.instance_variable_get(:@audited_pipeline).two_phase.nonce_manager.store.stop_sweep!
+    guard_pipeline = pipeline.instance_variable_get(:@audited_pipeline).instance_variable_get(:@pipeline)
+    guard_pipeline.send(:two_phase).nonce_manager.store.stop_sweep!
   end
 
   describe "read lifecycle via manage_background_jobs" do

@@ -100,7 +100,13 @@ module Wild
           check_action_name_format(name)
           check_action_duplicate(name, cat_name)
           ActionValidator.new(action_hash, name, @hard_ceilings, @errors).validate
-          @actions[name] = action_hash.freeze
+          # `defaults` is required precisely so an action can omit rate_limit,
+          # blast_radius_cap, requires_confirmation, or nonce_ttl_seconds and
+          # inherit it here; without this merge RateLimiter/BlastRadiusEnforcer
+          # raise NoMethodError/ArgumentError on the missing key at call time
+          # instead of denying (finding f-l10-6, review wave 2026-08-25).
+          # Explicit per-action keys win over the defaults.
+          @actions[name] = @defaults.merge(action_hash).freeze
         end
 
         def check_action_name_format(name)

@@ -25,7 +25,12 @@ module Wild
 
         delegate :register_executor, to: :@pipeline
 
-        delegate :two_phase, to: :@pipeline
+        # No delegation for :two_phase. Delegating it would hand any holder of
+        # this object a way to mint a nonce and call TwoPhaseFlow#confirm_and_execute
+        # directly, bypassing Pipeline#call's allowlist, rate limit, and blast-radius
+        # checks and this class's own audit wrapper (finding f-l10-4, review wave
+        # 2026-08-25). Nothing in lib needs it: #call is the only sanctioned entry
+        # point for both preview and confirm.
       end
     end
   end

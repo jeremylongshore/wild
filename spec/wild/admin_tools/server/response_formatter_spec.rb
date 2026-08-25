@@ -106,6 +106,41 @@ RSpec.describe Wild::AdminTools::Server::ResponseFormatter do
       end
     end
 
+    context "with a denied result carrying a nonce internal_reason (finding f-l10-5)" do
+      # Security Decision 8 (guard/nonce_manager.rb): clients get only the
+      # opaque :reason. internal_reason discriminates not_found / expired /
+      # already_used / mismatch and must stay server-side (audit-only).
+      %w[nonce_not_found nonce_expired nonce_already_used nonce_parameter_mismatch].each do |internal|
+        it "never leaks internal_reason (#{internal}) into the client response" do
+          result = Wild::AdminTools::Result.new(
+            status: :denied,
+            action: "retry_job",
+            operation: "unknown",
+            metadata: { reason: "nonce_invalid", internal_reason: internal }
+          )
+
+          body = described_class.format(result).structured_content
+
+          expect(body[:reason]).to eq("nonce_invalid")
+          expect(body).not_to have_key(:internal_reason)
+        end
+      end
+
+      it "produces an identical, opaque body across every nonce denial subtype" do
+        bodies = %w[nonce_not_found nonce_expired nonce_already_used nonce_parameter_mismatch].map do |internal|
+          result = Wild::AdminTools::Result.new(
+            status: :denied,
+            action: "retry_job",
+            operation: "unknown",
+            metadata: { reason: "nonce_invalid", internal_reason: internal }
+          )
+          described_class.format(result).structured_content
+        end
+
+        expect(bodies.uniq.size).to eq(1)
+      end
+    end
+
     context "with an error result" do
       let(:result) do
         Wild::AdminTools::Result.new(

@@ -139,4 +139,47 @@ RSpec.describe Wild::AdminTools::Guard::PolicyConfig do
       expect(valid_policy_config.actions).to be_frozen
     end
   end
+
+  describe "action-level defaults merge (finding f-l10-6)" do
+    let(:hash_with_sparse_action) do
+      valid_policy_hash.tap do |h|
+        h["action_categories"]["background_jobs"]["actions"] << {
+          "name" => "purge_all_jobs",
+          "operation" => "mutate_destructive",
+          "requires_confirmation" => true
+          # rate_limit, blast_radius_cap, nonce_ttl_seconds intentionally omitted:
+          # REQUIRED_DEFAULTS makes `defaults` mandatory precisely so an action
+          # can rely on it for these.
+        }
+      end
+    end
+
+    it "fills in rate_limit from defaults when the action omits it" do
+      config = described_class.from_hash(hash_with_sparse_action)
+      expect(config.action("purge_all_jobs")["rate_limit"]).to eq(config.defaults["rate_limit"])
+    end
+
+    it "fills in blast_radius_cap from defaults when the action omits it" do
+      config = described_class.from_hash(hash_with_sparse_action)
+      expect(config.action("purge_all_jobs")["blast_radius_cap"]).to eq(config.defaults["blast_radius_cap"])
+    end
+
+    it "fills in nonce_ttl_seconds from defaults when the action omits it" do
+      config = described_class.from_hash(hash_with_sparse_action)
+      expect(config.action("purge_all_jobs")["nonce_ttl_seconds"]).to eq(config.defaults["nonce_ttl_seconds"])
+    end
+
+    it "lets an explicit per-action value win over defaults" do
+      hash = valid_policy_hash.tap do |h|
+        h["action_categories"]["background_jobs"]["actions"] << {
+          "name" => "purge_all_jobs",
+          "operation" => "mutate_destructive",
+          "requires_confirmation" => true,
+          "rate_limit" => "5/minute"
+        }
+      end
+      config = described_class.from_hash(hash)
+      expect(config.action("purge_all_jobs")["rate_limit"]).to eq("5/minute")
+    end
+  end
 end

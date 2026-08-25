@@ -121,9 +121,22 @@ RSpec.describe Wild::AdminTools::Audit::AuditedPipeline do
     end
   end
 
-  describe "#two_phase" do
-    it "delegates to the wrapped pipeline" do
-      expect(audited.two_phase).to be_a(Wild::AdminTools::Guard::TwoPhaseFlow)
+  describe "guard-chain bypass (finding f-l10-4)" do
+    it "does not expose a #two_phase reader at all" do
+      expect(audited).not_to respond_to(:two_phase)
+    end
+
+    it "cannot be used to mint a nonce and execute a destructive action outside #call" do
+      # This is the exact shape of the f-l10-4 repro: an in-process holder of
+      # AuditedPipeline reaches for TwoPhaseFlow directly to skip the allowlist,
+      # rate limit, blast-radius check, and this class's own audit wrapper.
+      # It must fail before it can touch the job adapter or the audit store.
+      Wild::AdminTools.configuration.job_adapter.seed_job("job_bypass", status: "failed", queue: "critical")
+
+      expect { audited.two_phase }.to raise_error(NoMethodError)
+
+      expect(Wild::AdminTools.configuration.job_adapter.write_methods_called).to be_empty
+      expect(audit_store.count).to eq(0)
     end
   end
 
