@@ -38,38 +38,31 @@ module Wild
 
           private
 
+          # Both purge paths route through JsonLinesStore#compact so the
+          # read-modify-write happens under the store's own @mutex (finding
+          # f-l02-1) and the rewrite is an atomic, fsync'd rename rather
+          # than an in-place truncate (finding f-l02-2). A failure here
+          # (disk full mid-rewrite, a rename that cannot land) is not
+          # swallowed: #compact re-raises, and it propagates out of
+          # purge_before/remove_oldest_until_within_limit/purge_expired/
+          # purge_oversized/purge_all so a caller (a scheduler, a rake task)
+          # sees a real exception instead of a purge that silently returned
+          # 0 while having actually failed.
           def purge_before(cutoff)
-            kept_lines = []
-            removed_count = 0
-
-            File.foreach(@store.path) do |line|
-              data = safe_parse(line)
-              if data && data[:received_at] && data[:received_at] < cutoff
-                removed_count += 1
-              else
-                kept_lines << line
+            @store.compact do |lines|
+              lines.reject do |line|
+                data = safe_parse(line)
+                data && data[:received_at] && data[:received_at] < cutoff
               end
             end
-
-            return 0 if removed_count.zero?
-
-            File.write(@store.path, kept_lines.join)
-            removed_count
           end
 
           def remove_oldest_until_within_limit
-            lines = File.readlines(@store.path)
-            removed_count = 0
-
-            while total_size(lines) > @max_size_bytes && !lines.empty?
-              lines.shift
-              removed_count += 1
+            @store.compact do |lines|
+              kept = lines.dup
+              kept.shift while total_size(kept) > @max_size_bytes && !kept.empty?
+              kept
             end
-
-            return 0 if removed_count.zero?
-
-            File.write(@store.path, lines.join)
-            removed_count
           end
 
           def total_size(lines)

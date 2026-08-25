@@ -105,6 +105,38 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
     it "does not propagate the store exception to the caller" do
       expect { receiver.receive(valid_action_completed_event) }.not_to raise_error
     end
+
+    it "counts the storage failure distinctly from a validation reject (finding f-l02-3)" do
+      expect { receiver.receive(valid_action_completed_event) }
+        .to change(receiver, :storage_failure_count).from(0).to(1)
+    end
+
+    it "does not count a validation reject as a storage failure" do
+      event = valid_action_completed_event.except(:outcome)
+      expect { receiver.receive(event) }.not_to change(receiver, :storage_failure_count)
+    end
+
+    it "logs the storage failure to Wild.config.audit_logger when one is configured" do
+      logger = instance_double(Logger, warn: nil)
+      Wild.configure { |c| c.audit_logger = logger }
+
+      receiver.receive(valid_action_completed_event)
+
+      expect(logger).to have_received(:warn).with(a_string_matching(/disk full/))
+    end
+
+    it "does not raise when no audit_logger is configured" do
+      expect(Wild.config.audit_logger).to be_nil
+      expect { receiver.receive(valid_action_completed_event) }.not_to raise_error
+    end
+
+    it "does not raise when the configured audit_logger itself raises" do
+      broken_logger = instance_double(Logger)
+      allow(broken_logger).to receive(:warn).and_raise(RuntimeError, "log pipe closed")
+      Wild.configure { |c| c.audit_logger = broken_logger }
+
+      expect { receiver.receive(valid_action_completed_event) }.not_to raise_error
+    end
   end
 
   describe "exception safety" do

@@ -195,6 +195,53 @@ RSpec.describe Wild::Telemetry::Collector::Store::RetentionManager do
       end
     end
   end
+
+  describe "concurrency: purge does not lose a racing append (finding f-l02-1)" do
+    # Fails on main: purge_before reads and File.writes @store.path directly,
+    # with no synchronization against JsonLinesStore#append's @mutex, so an
+    # append landing between the read and the write is built from a stale
+    # snapshot and dropped. purge_before only reaches File.write when it
+    # actually has something expired to remove (`return 0 if
+    # removed_count.zero?`), so the race needs a steady stream of
+    # already-expired "noise" alongside the fresh events under test, or the
+    # short-circuit means File.write is never even reached. This empirically
+    # loses a measurable slice of the fresh events on main (2000 fresh /
+    # 2000 expired-noise appends racing 300 purge_expired calls); on the
+    # fixed branch both go through JsonLinesStore#compact under the same
+    # @mutex #append uses, so nothing is ever lost, deterministically, every
+    # run.
+    let(:manager) { described_class.new(store: store, retention_days: 90) }
+    let(:fresh_count) { 2000 }
+    let(:purge_count) { 300 }
+
+    def envelope_at(seconds_ago, action:)
+      ts = (Time.now.utc - seconds_ago).iso8601(6)
+      Wild::Telemetry::Collector::Schema::EventEnvelope.new(
+        event_type: "action.completed",
+        timestamp: ts,
+        caller_id: "test",
+        action: action,
+        outcome: "success",
+        received_at: ts
+      )
+    end
+
+    it "retains every fresh appended event even while purge_expired races it against expired noise" do
+      appender = Thread.new do
+        fresh_count.times do |i|
+          store.append(envelope_at((120 * 86_400) - i, action: "expired_noise_#{i}"))
+          store.append(envelope_at(86_400 - i, action: "fresh_survivor_#{i}"))
+        end
+      end
+
+      purger = Thread.new { purge_count.times { manager.purge_expired } }
+
+      [appender, purger].each(&:join)
+
+      survivors = store.query.map(&:action)
+      expect(survivors.count { |a| a.start_with?("fresh_survivor_") }).to eq(fresh_count)
+    end
+  end
 end
 
 # rubocop:enable RSpec/MultipleMemoizedHelpers, RSpec/ContextWording

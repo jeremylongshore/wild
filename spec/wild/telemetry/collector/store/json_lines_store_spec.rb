@@ -249,6 +249,84 @@ RSpec.describe Wild::Telemetry::Collector::Store::JsonLinesStore do
       expect(results.size).to eq(1)
     end
   end
+
+  describe "#compact" do
+    context "when the file does not exist" do
+      it "returns 0 without yielding" do
+        expect { |b| store.compact(&b) }.not_to yield_control
+        expect(store.compact { |lines| lines }).to eq(0)
+      end
+    end
+
+    context "when nothing is removed" do
+      before { store.append(build_envelope(timestamp: "2026-03-19T10:00:00.000Z")) }
+
+      it "returns 0 and leaves the file unchanged" do
+        result = store.compact { |lines| lines }
+        expect(result).to eq(0)
+        expect(store.count).to eq(1)
+      end
+    end
+
+    context "when some lines are removed" do
+      before do
+        store.append(build_envelope(timestamp: "2026-03-19T10:00:00.000Z"))
+        store.append(build_envelope(timestamp: "2026-03-19T10:00:01.000Z"))
+      end
+
+      it "returns the count of removed lines and keeps the rest" do
+        result = store.compact { |lines| lines.drop(1) }
+        expect(result).to eq(1)
+        expect(store.count).to eq(1)
+      end
+    end
+
+    describe "crash safety (finding f-l02-2)" do
+      before { store.append(build_envelope(timestamp: "2026-03-19T10:00:00.000Z")) }
+
+      it "leaves the original file byte-for-byte intact when the rename step fails" do
+        original_content = File.read(store_path)
+        allow(File).to receive(:rename).and_raise(Errno::ENOSPC, "no space left on device")
+
+        expect { store.compact { |_lines| [] } }.to raise_error(Errno::ENOSPC)
+        expect(File.read(store_path)).to eq(original_content)
+      end
+
+      it "deletes the temp file it wrote before re-raising" do
+        allow(File).to receive(:rename).and_raise(Errno::ENOSPC, "no space left on device")
+
+        expect { store.compact { |_lines| [] } }.to raise_error(Errno::ENOSPC)
+        leftovers = Dir.glob(File.join(tmpdir, "*.tmp-*"))
+        expect(leftovers).to be_empty
+      end
+    end
+
+    describe "concurrency safety (finding f-l02-1)" do
+      it "does not lose events written by concurrent appends while a compact runs" do
+        # Fails on main: RetentionManager (and any other #compact-shaped
+        # rewrite) reads/writes @store.path directly, outside @mutex, so an
+        # append landing mid-purge is built into a stale snapshot and lost.
+        store.append(build_envelope(timestamp: "2026-03-19T09:00:00.000Z"))
+
+        appender = Thread.new do
+          50.times do |i|
+            ts = format("2026-03-19T10:%02d:00.000Z", i)
+            store.append(build_envelope(timestamp: ts))
+          end
+        end
+
+        compactor = Thread.new do
+          10.times do
+            store.compact { |lines| lines } # no-op rewrite, still takes the lock + does the I/O
+          end
+        end
+
+        [appender, compactor].each(&:join)
+
+        expect(store.count).to eq(51)
+      end
+    end
+  end
 end
 
 # rubocop:enable RSpec/MultipleMemoizedHelpers
