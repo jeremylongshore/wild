@@ -88,6 +88,24 @@ RSpec.describe Wild::Hooks::Audit::Logger do
         expect(event.context_summary).to include("[REDACTED]")
         expect(event.context_summary).not_to include("bash")
       end
+
+      it "never writes a raw password embedded in an error message into the trail entry" do
+        err = RuntimeError.new("connection failed: password=hunter2")
+        error_result = build_result(handler: handler, outcome: :error, error: err)
+
+        event = logger.record(error_result, {})
+
+        expect(event.error_message).not_to include("hunter2")
+        expect(event.error_message).to include("[REDACTED]")
+      end
+
+      it "does not raise when the error's #message itself raises" do
+        raising_error = RuntimeError.new
+        allow(raising_error).to receive(:message).and_raise(StandardError, "boom")
+        error_result = build_result(handler: handler, outcome: :error, error: raising_error)
+
+        expect { logger.record(error_result, {}) }.not_to raise_error
+      end
     end
   end
 

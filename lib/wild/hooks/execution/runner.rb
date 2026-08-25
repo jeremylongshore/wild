@@ -8,12 +8,6 @@ module Wild
       # Each handler is wrapped with timeout enforcement and error isolation.
       # Returns an Array of HookResult objects.
       class Runner
-        # Number of observability-sink failures (audit_logger/health_monitor
-        # raising) isolated since this Runner was built. f-l01-2: a raising
-        # sink must not abort the invocation after the handler already ran,
-        # but it must not be silently swallowed either (council F2).
-        attr_reader :observability_failures
-
         def initialize(registry:, config: Wild.config.hooks, audit_logger: nil,
                        health_monitor: nil)
           @registry       = registry
@@ -22,6 +16,17 @@ module Wild
           @health_monitor = health_monitor
           @isolator       = ErrorIsolator.new
           @observability_failures = 0
+          @observability_failures_mutex = Mutex.new
+        end
+
+        # Number of observability-sink failures (audit_logger/health_monitor
+        # raising) isolated since this Runner was built. f-l01-2: a raising
+        # sink must not abort the invocation after the handler already ran,
+        # but it must not be silently swallowed either (council F2). Guarded
+        # by a Mutex: sibling sinks (Health::Monitor, Audit::Trail) already
+        # serialize their own mutable state the same way.
+        def observability_failures
+          @observability_failures_mutex.synchronize { @observability_failures }
         end
 
         # Execute all enabled handlers registered for hook_name.
@@ -39,8 +44,12 @@ module Wild
             result = execute_handler(handler, context)
             results << result
 
-            isolate_observability("audit_logger") { @audit_logger&.record(result, context) }
-            isolate_observability("health_monitor") { @health_monitor&.record(result) }
+            isolate_observability(hook_name, handler, "audit_logger") do
+              @audit_logger&.record(result, context)
+            end
+            isolate_observability(hook_name, handler, "health_monitor") do
+              @health_monitor&.record(result)
+            end
 
             break if result.error? && @config.on_handler_error == :halt
           end
@@ -53,31 +62,62 @@ module Wild
         # Isolate an observability sink (audit_logger/health_monitor) so a
         # raising sink cannot abort the invocation after the handler already
         # ran. The failure is not swallowed: it increments
-        # observability_failures and is logged via Wild.config.audit_logger
-        # (same escape hatch used by CapabilityGate::Evaluator for its own
-        # audit-emission failures), so an observability-pipeline outage is
-        # itself observable rather than silent.
-        def isolate_observability(sink_name)
-          yield
-        rescue StandardError => e
-          @observability_failures += 1
-          log_observability_failure(sink_name, e)
+        # observability_failures and is logged (same escape hatch used by
+        # CapabilityGate::Evaluator for its own audit-emission failures), so
+        # an observability-pipeline outage is itself observable rather than
+        # silent.
+        #
+        # Reuses the Runner's own @isolator instead of a bare `rescue
+        # StandardError` so this obeys the same contract every handler call
+        # already does: Timeout::Error/SignalException propagate rather than
+        # being swallowed as an "observability failure" (they are not one).
+        def isolate_observability(hook_name, handler, sink_name, &)
+          status, error = @isolator.call(&)
+          return unless status == :error
+
+          @observability_failures_mutex.synchronize { @observability_failures += 1 }
+          log_observability_failure(hook_name, handler, sink_name, error)
         end
 
-        def log_observability_failure(sink_name, error)
+        def log_observability_failure(hook_name, handler, sink_name, error)
+          line = observability_failure_line(hook_name, handler, sink_name, error)
           logger = Wild.config.audit_logger
-          return unless logger.respond_to?(:error)
 
-          logger.error(
-            "[wild:hooks] #{sink_name} observability sink failed: " \
-            "#{error.class}: #{error.message}"
-          )
+          if logger.respond_to?(:error)
+            logger.error(line)
+          else
+            # No audit_logger is configured (the shipped default). Falling
+            # through silently here would leave observability_failures as a
+            # counter nobody reads, which is the same F2 anti-pattern this
+            # method exists to avoid. warn keeps the default install loud.
+            warn(line)
+          end
         rescue StandardError
           # The configured logger is itself broken. There is nowhere left to
           # write; do not raise out of the Runner. observability_failures was
           # already incremented above, so the failure remains countable even
           # when the log line itself cannot be emitted.
           nil
+        end
+
+        def observability_failure_line(hook_name, handler, sink_name, error)
+          # error.class is always safe; error.message is guarded via
+          # #safe_message below (a pathological exception whose #message
+          # itself raises must not silently drop the whole log line).
+          "[wild:hooks] #{sink_name} observability sink failed for hook=#{hook_name.inspect} " \
+            "handler=#{handler&.id.to_s.inspect}: #{error.class}: #{safe_message(error)}"
+        end
+
+        # #message on an arbitrary rescued exception is not guaranteed safe
+        # (a pathological exception can override it to raise). Degrade to a
+        # placeholder rather than lose the whole should-have-logged line.
+        # Mirrors Wild::CapabilityGate::Evaluator::SafeCoercion#safe_message
+        # (copied, not required: T1 hooks must not depend on T3
+        # capability_gate per ADR-0003).
+        def safe_message(error)
+          error.message
+        rescue StandardError
+          "<unprintable message>"
         end
 
         def execute_handler(handler, context)

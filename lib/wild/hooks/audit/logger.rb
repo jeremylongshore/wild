@@ -23,7 +23,7 @@ module Wild
             outcome: hook_result.outcome,
             duration_ms: hook_result.duration_ms,
             context_summary: summarise_context(context),
-            error_message: hook_result.error&.message
+            error_message: sanitize_error_message(hook_result.error)
           )
 
           @trail.append(event)
@@ -35,13 +35,27 @@ module Wild
         private
 
         def summarise_context(context)
-          return "" unless context.is_a?(Hash) && !context.empty?
+          return "" unless context.is_a?(Hash)
 
           # F2 (wild-rvv, hooks audit): route every context value through the
           # Sanitizer before it lands in the trail. Without this, a raw
           # password/token/api_key passed as hook context was recorded
-          # verbatim via v.inspect (f-l01-1).
+          # verbatim via v.inspect (f-l01-1). The Sanitizer already
+          # short-circuits blank input, so no separate emptiness check is
+          # needed here.
           @sanitizer.sanitize(context).map { |k, v| "#{k}=#{v.inspect}" }.join(", ")
+        end
+
+        # A raw exception message can itself carry a secret (e.g. a
+        # connection-string or token embedded by the raising code as
+        # "password=hunter2"). Route it through the Sanitizer's string
+        # scrubbing before it lands in error_message (f-l01-1 follow-up).
+        def sanitize_error_message(error)
+          return nil unless error
+
+          @sanitizer.sanitize_string(error.message)
+        rescue StandardError
+          "<unprintable message>"
         end
       end
     end
