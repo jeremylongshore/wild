@@ -15,7 +15,7 @@
 # F6 fix: Session/Store wired in or deleted (Role 6 decision).
 
 enforce_dependencies: true
-enforce_privacy: true
 dependencies:
-  - "../hooks"
-  - "../analyzers/permission"
+  - "lib/wild/hooks"
+  - "lib/wild/analyzers/permission"
+  - "."

@@ -5,7 +5,7 @@
 # F7 fix). Only downstream consumer of Collector inside the gem.
 
 enforce_dependencies: true
-enforce_privacy: true
 dependencies:
-  - "../../hooks"
-  - "../collector"
+  - "lib/wild/hooks"
+  - "lib/wild/telemetry/collector"
+  - "."

@@ -36,7 +36,7 @@ Gem::Specification.new do |spec|
     `git ls-files -z`.split("\x0").reject do |f|
       f.start_with?("spec/", ".github/", "000-docs/", ".gitignore", ".gitattributes",
                     ".editorconfig", ".rubocop.yml", "packwerk.yml", "codecov.yml",
-                    "Gemfile", "Rakefile")
+                    "Gemfile", "Rakefile", "config/")
     end
   end
 

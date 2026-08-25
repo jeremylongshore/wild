@@ -34,7 +34,7 @@ bd doctor                             # Health check
 ### Session End
 1. Close finished tasks: `bd close <id> -r "Evidence of completion"`
 2. Update in-progress tasks with status notes
-3. Run quality gates (`rspec`, `rubocop`, `packwerk check`, `brakeman`, `bundler-audit`)
+3. Run quality gates (`rspec`, `rubocop`, `packwerk validate`, `packwerk check`, `brakeman --force -p . --skip-files spec/`, `bundler-audit`)
 4. **PUSH TO REMOTE**:
    ```bash
    git push

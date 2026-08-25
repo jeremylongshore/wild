@@ -26,13 +26,29 @@ jobs:
         run: bundle exec rubocop --no-server --parallel --display-cop-names
 
   boundary:
-    # Packwerk needs Rails-application context (spec/dummy/) AND per-namespace
-    # package.yml files. Both are P1/P2 deliverables (Role 4 + Role 8). Until
-    # then the job is informational: failure does NOT block PRs. Tracked under
-    # bd `wild-rvv.1` (engine epic) and `wild-rvv.9` (rails_ergonomics epic).
-    name: Namespace boundary (Packwerk) [informational]
+    # spec/dummy/ landed (review-wave f-x2-1/f-x2-2), so Packwerk boots and
+    # runs a real check. `packwerk validate` runs first (review wave
+    # f-x2-2): it catches malformed package.yml manifests (e.g. an unknown
+    # key packwerk-extensions would need but this repo doesn't depend on)
+    # before `check` ever runs, so a manifest typo fails loud instead of
+    # silently narrowing what gets checked. Every lib/wild/<namespace>/
+    # package.yml declares a dependency on the root package ('.'), the
+    # substrate every tier is allowed to use per ADR-0003 (Wild::Error
+    # subclasses, Wild.config, Wild::Configuration, Wild::Engine); the five
+    # engine-substrate files those constants live in are no longer excluded
+    # from packwerk.yml, so that edge is real (see packwerk.yml's own
+    # comment for the full history, including a prior draft of this
+    # comment that was wrong about the edge already doing that work). The
+    # ten lib/wild/<namespace>.rb entry files are still excluded in
+    # packwerk.yml: they are each namespace's own wiring/public surface,
+    # structurally stuck in the root package by Ruby's file-per-module
+    # convention, not a genuine root-to-namespace coupling. That exclusion
+    # is a known, documented enforcement hole (review-wave f-x2-5,
+    # packwerk.yml "KNOWN ENFORCEMENT HOLE"), not a gap this job silently
+    # papers over. `bundle exec packwerk check` is 0 offenses; the job
+    # blocks like every other required check.
+    name: Namespace boundary (Packwerk)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
 
@@ -42,14 +58,22 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
 
+      - name: Packwerk validate
+        run: bundle exec packwerk validate
+
       - name: Packwerk check
         run: bundle exec packwerk check
 
   security:
-    # brakeman scans Rails apps. Until Role 8 lands spec/dummy/ in P2, brakeman
-    # exits non-zero with "no Rails app found". bundler-audit DOES work standalone
-    # so it runs unconditionally; brakeman runs informationally. Tracked under
-    # bd `wild-rvv.9` (rails_ergonomics epic — spec/dummy lands with the generator).
+    # bundler-audit works standalone so it runs unconditionally. brakeman
+    # scans the real gem source under lib/ (review wave f-x2-1: scanning
+    # only spec/dummy/, an empty host app with 0 controllers/models, never
+    # parsed lib/wild/** at all: a planted `system(...)` call in lib would
+    # have passed clean). `--force` re-detects the app type despite the
+    # missing app/ tree; `--skip-files spec/` keeps the scan to source, not
+    # the dummy app or specs, since a Rails-app scan of spec/dummy alone
+    # was the whole problem. Required check: it either passes cleanly or
+    # finds a real Rails-security warning, either way worth blocking on.
     name: Security (brakeman + bundler-audit)
     runs-on: ubuntu-latest
     steps:
@@ -61,9 +85,8 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
 
-      - name: brakeman (informational until spec/dummy lands in P2)
-        continue-on-error: true
-        run: bundle exec brakeman --no-pager --quiet --no-progress
+      - name: brakeman
+        run: bundle exec brakeman --force -p . --skip-files spec/ --no-pager --quiet --no-progress
 
       - name: bundler-audit
         run: |
@@ -102,16 +125,19 @@ jobs:
 
   ci-ok:
     # Fan-in gate: the single required status check for branch protection on
-    # main. `boundary` (Packwerk) is deliberately NOT in `needs` until
-    # spec/dummy/ exists and the lane can pass; it stays informational.
+    # main. `boundary` (Packwerk) is now in `needs`: spec/dummy/ exists, the
+    # root-substrate dependency is declared in every package.yml, and the
+    # ten namespace entry files are excluded (packwerk.yml), so the lane is
+    # a real, passing gate rather than an informational one.
     name: CI OK
     runs-on: ubuntu-latest
-    needs: [lint, security, test]
+    needs: [lint, boundary, security, test]
     if: always()
     steps:
       - name: Fail if any required job failed or was cancelled
         run: |
-          echo "lint=${{ needs.lint.result }} security=${{ needs.security.result }} test=${{ needs.test.result }}"
+          echo "lint=${{ needs.lint.result }} boundary=${{ needs.boundary.result }} security=${{ needs.security.result }} test=${{ needs.test.result }}"
           [ "${{ needs.lint.result }}" = "success" ] && \
+          [ "${{ needs.boundary.result }}" = "success" ] && \
           [ "${{ needs.security.result }}" = "success" ] && \
           [ "${{ needs.test.result }}" = "success" ]

@@ -14,7 +14,7 @@
 > (`000-docs/009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md`).
 >
 > **Works today:** the library (`require "wild"`, all ten `Wild::*` namespaces), `Wild.configure`,
-> the per-namespace rake test tasks, the full RSpec suite (3076 examples) and RuboCop in CI.
+> the per-namespace rake test tasks, the full RSpec suite (3083+ examples) and RuboCop in CI.
 >
 > **Not yet:** `rails g wild:install` (stub), the two MCP server binaries (stubs that exit 1;
 > not declared as gem executables), `prompts/` (does not exist), the five-minute stopwatch test,

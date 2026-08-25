@@ -13,7 +13,7 @@
 # (both Tier 4; sibling namespaces).
 
 enforce_dependencies: true
-enforce_privacy: true
 dependencies:
-  - "../hooks"
-  - "../capability_gate"
+  - "lib/wild/hooks"
+  - "lib/wild/capability_gate"
+  - "."

@@ -6,7 +6,7 @@
 # (Role 7 P1 ownership).
 
 enforce_dependencies: true
-enforce_privacy: true
 dependencies:
-  - "../../hooks"
-  - "../../telemetry/analysis"
+  - "lib/wild/hooks"
+  - "lib/wild/telemetry/analysis"
+  - "."

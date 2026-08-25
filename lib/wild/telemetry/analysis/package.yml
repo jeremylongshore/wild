@@ -8,7 +8,7 @@
 # sequence number). This package's design is the locus of F8 work.
 
 enforce_dependencies: true
-enforce_privacy: true
 dependencies:
-  - "../../hooks"
-  - "../pipeline"
+  - "lib/wild/hooks"
+  - "lib/wild/telemetry/pipeline"
+  - "."

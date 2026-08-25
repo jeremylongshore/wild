@@ -6,6 +6,6 @@
 # gemspec (per ADR-0002) only when a real external consumer appears.
 
 enforce_dependencies: true
-enforce_privacy: true
 dependencies:
-  - "../hooks"
+  - "lib/wild/hooks"
+  - "."

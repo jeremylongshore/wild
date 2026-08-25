@@ -74,8 +74,9 @@ Ten namespaces sit in a four-tier directed acyclic graph:
 
 Engine-level files (`lib/wild.rb`, `lib/wild/engine.rb`,
 `lib/wild/configuration.rb`, `lib/wild/error.rb`, `lib/wild/version.rb`)
-are not packwerk-tracked; they form the engine substrate that every
-namespace inherits.
+form the engine substrate that every namespace inherits via its `"."`
+dependency on the root package (see the 2026-08-25 amendment below: as
+of this fix they ARE packwerk-tracked, resolved to the root package).
 
 ### Forbidden patterns
 
@@ -123,7 +124,9 @@ shape:
 | Public | None | Other namespaces (per the table above), engine, consumers |
 | Private | `# @api private` YARD tag on the constant or method | Only that namespace's own files |
 
-Packwerk's `enforce_privacy: true` enforces the marker at AST level.
+`# @api private` is convention only, enforced by code review, not by
+Packwerk (see the 2026-08-25 amendment below: `enforce_privacy` needs
+the `packwerk-extensions` gem, which this repo does not depend on).
 A symbol without `# @api private` is callable from any namespace that
 declares this namespace as a dependency.
 
@@ -177,3 +180,57 @@ These rules are documented in CONTRIBUTING.md (PR-F of Role 4).
 - DHH per-repo merge table — confirms each namespace's archetype
 - Pike review of `wild-hook-ops` — informed `Wild::Hooks` as Tier 1
 - Kleppmann/Hickey on telemetry layering — informed Collector → Pipeline → Analysis chain
+
+## Amendment (2026-08-25, review wave f-x2-2 / f-x2-5)
+
+Two factual corrections to the sections above, and one documented gap, from
+the paired `/code-review` verifier on PR #72. This is a truth-sync, not a
+topology change: no edge in the "Allowed dependencies" table above moved.
+
+1. **The engine substrate IS packwerk-tracked now.** "Engine-level files
+   ... are not packwerk-tracked" (above) was accurate when written but is
+   now stale: `packwerk.yml` no longer excludes `lib/wild.rb`,
+   `lib/wild/engine.rb`, `lib/wild/configuration.rb`, `lib/wild/error.rb`,
+   or `lib/wild/version.rb`. They resolve to the root package
+   (`package.yml`, `dependencies: []`), and every namespace's `"."`
+   dependency on that root package is what makes referencing
+   `Wild::Error`, `Wild.config`, `Wild::Configuration`, and `Wild::Engine`
+   a checked, legal edge instead of untracked code Packwerk never saw.
+   Before this fix, the exclusion made the `"."` dependency dead
+   configuration: nothing in those five files was in Packwerk's constant
+   map, so nothing could ever have been flagged for referencing them, and
+   `packwerk check` staying at 0 offenses was not evidence the edge worked.
+
+2. **`enforce_privacy: true` is NOT enforced.** "Packwerk's
+   `enforce_privacy: true` enforces the marker at AST level" (above) was
+   never true for this repo: that key belongs to the separate
+   `packwerk-extensions` gem, which `wild` does not depend on. Every
+   `package.yml` carried `enforce_privacy: true` regardless, which
+   `bundle exec packwerk validate` rejects outright as an unknown key,
+   meaning `packwerk validate` was never run in CI before this fix (only
+   `packwerk check`, which does not validate manifest schema). The key has
+   been removed from all eleven `package.yml` files. `# @api private` is
+   convention and code-review discipline today, not a CI-enforced
+   boundary. Adopting `packwerk-extensions` to make it real is a
+   follow-up, not done here (CHANGELOG `### Repo`).
+
+3. **Known enforcement hole: the ten namespace entry files.** Each
+   namespace's `lib/wild/<ns>.rb` (module definition + requires + a
+   handful of module-level factory/config methods, e.g.
+   `Wild::Skillops.build`) sits in `lib/wild/`, not inside its own
+   namespace subdirectory, so Packwerk's directory-based resolution
+   assigns it to the root package. These ten files remain excluded from
+   `packwerk.yml` (same shape the five engine-substrate files used to
+   have). Effect: a boundary violation reachable only through one of
+   these module-level entry points (`Wild::Skillops`, `Wild::AdminTools`,
+   `Wild::Introspection.configuration`,
+   `Wild::Analyzers::Permission::LoadError`, and so on) is invisible to
+   `packwerk check` and will not block CI. A cheap fix was investigated
+   (make each entry file a thin `require`-only shim, moving module-level
+   API into a namespace-owned subfile such as a `Facade` class) and found
+   mechanical for a single small namespace but not something to carry
+   across all nine remaining entry files (609 combined lines) and their
+   call sites in one pass; tracked as a follow-up (CHANGELOG `### Repo`).
+   Until closed, this is the graph's one real gap: everything in the
+   "Allowed dependencies" table is enforced except reads that go through
+   a namespace's own entry-file module method.

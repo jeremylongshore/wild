@@ -66,8 +66,9 @@ jobs:
           echo "--- Running gates ---"
           bundle exec rspec
           bundle exec rubocop
+          bundle exec packwerk validate
           bundle exec packwerk check
-          bundle exec brakeman --no-pager --quiet --no-progress
+          bundle exec brakeman --force -p . --skip-files spec/ --no-pager --quiet --no-progress
           bundle exec bundler-audit check --update
 
       - name: Determine previous tag

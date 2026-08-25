@@ -10,5 +10,5 @@
 # for patterns ≥ 2 namespaces will use.
 
 enforce_dependencies: true
-enforce_privacy: true
-dependencies: []
+dependencies:
+  - "."

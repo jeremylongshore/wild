@@ -79,13 +79,13 @@ phase.
 | L1 | Local git hooks (plain-shell) | Installed; engineer runs `scripts/install-hooks` once per clone | `scripts/git-hooks/{pre-commit,commit-msg,pre-push}`, `scripts/install-hooks` |
 | L1 | Dependabot | Installed | `.github/dependabot.yml` |
 | L2 | RuboCop (+ rails + rspec cops) | Installed, CI-enforced | `.rubocop.yml`, `ci.yml lint` job |
-| L2 | Packwerk (namespace boundary) | Installed; root + **all 10 per-namespace `package.yml` present**; `boundary` job `continue-on-error` until `spec/dummy/` lands (P2) | `packwerk.yml`, 11× `package.yml`, `ci.yml boundary` job |
+| L2 | Packwerk (namespace boundary) | Installed, CI-enforced (both `packwerk validate` and `packwerk check` are required `boundary` job steps); root + **all 10 per-namespace `package.yml` present**, each declaring the root-substrate dependency against the five engine-substrate files, which are packwerk-tracked (not excluded); the ten `lib/wild/<namespace>.rb` entry files remain excluded (a documented enforcement hole, see `packwerk.yml`'s "KNOWN ENFORCEMENT HOLE" comment and ADR-0003's 2026-08-25 amendment); `enforce_privacy` was removed from every `package.yml` (review-wave f-x2-2, it needs `packwerk-extensions`, not a dependency here, so `# @api private` is convention only); `bundle exec packwerk check` is 0 offenses | `packwerk.yml`, 11× `package.yml`, `spec/dummy/`, `ci.yml boundary` job |
 | L2 | brakeman | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
 | L2 | bundler-audit | Installed, CI-enforced | gemspec dev dep, `ci.yml security` job |
-| L3 | RSpec | Installed — **2988 examples / 0 failures across all 10 namespaces**; 98.29% line coverage | `spec/spec_helper.rb`, `.rspec`, `ci.yml test` matrix |
+| L3 | RSpec | Installed: **3083+ examples / 0 failures across all 10 namespaces** (review wave, 2026-08-25); 98.29% line coverage | `spec/spec_helper.rb`, `.rspec`, `ci.yml test` matrix |
 | L3 | SimpleCov + Cobertura | Installed (gated by `COVERAGE=1`); `minimum_coverage 85` enforced; `minimum_coverage_by_file 75` still commented (P1 — lift-able) | `spec/spec_helper.rb` |
 | L3 | Codecov upload | Installed; **`CODECOV_TOKEN` set 2026-05-30**; 9 per-component status checks live | `ci.yml test` job, `codecov.yml` |
-| L4 | spec/dummy/ Rails app | ABSENT (P2 — Role 8) | (gap — keeps boundary+brakeman informational) |
+| L4 | spec/dummy/ Rails app | Installed (review-wave f-x2-1/f-x2-2); minimal host app mounting `Wild::Engine` at `/wild` for Packwerk + brakeman + `spec/engine/engine_spec.rb` | `spec/dummy/` |
 | L5 | CodeQL (`security-extended`) | Installed — **merged to main (PR #6, 2026-05-29)**; runs on PRs | `.github/workflows/codeql.yml` |
 | L6 | Cucumber / .feature files | ABSENT (waived) | n/a |
 | L7 | UAT lifecycle | ABSENT (waived) | n/a |
@@ -117,11 +117,11 @@ phase.
 | Grade | **A− (90/100)** — see `TEST_AUDIT.md` for the full snapshot |
 | P0 gaps | **0** — L1/L2/L3 installed + CI-enforced; coverage gate, Codecov, CodeQL all live |
 | P1 gaps | 2 (per-file coverage floor still commented out — now lift-able; mutation/property/CRAP waiver rationale stale — decision point fired) |
-| P2 gaps | `spec/dummy/` absent (Role 8); TESTING.md policy-section drift flagged for engineer |
-| Verified | 2988 examples / 0 failures; 98.29% line coverage; all 11 package.yml present; CodeQL on main; CODECOV_TOKEN set |
+| P2 gaps | TESTING.md policy-section drift flagged for engineer; `spec/dummy/` landed since (review-wave f-x2-1/f-x2-2), row below is stale on that point |
+| Verified | 3083 examples / 0 failures (review wave, 2026-08-25); 98.29% line coverage (unverified since, not re-measured this pass); all 11 package.yml present; CodeQL on main; CODECOV_TOKEN set |
 | Handoff | None — no infra gap; remaining P1 items are engineer-owned policy decisions |
 | Prior audit | 2026-05-28 grade C (62/100), pre-namespace-move (PR #7, f3462eb) |
-| Re-audit cadence | After Role 6/7 close the deferred behavior beads (F2/F3/F7/F8) + Role 8 lands `spec/dummy/` → lift L4 waiver + measure namespace-level coverage |
+| Re-audit cadence | `spec/dummy/` landed (review-wave f-x2-1/f-x2-2): the L4 waiver is stale and should be lifted at the next full re-audit; still pending: close the deferred behavior beads (F2/F3/F7/F8) + measure namespace-level coverage |
 
 ## Audit-harness installation (L0)
 

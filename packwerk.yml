@@ -8,10 +8,64 @@
 #
 # Run: bundle exec packwerk check
 #
-# Note: CI marks the Packwerk job `continue-on-error: true` until Role 8
-# lands spec/dummy/ in P2 — Packwerk requires Rails-app context to boot.
-# Locally `bundle exec packwerk check` works when invoked from a host
-# Rails app that mounts Wild::Engine.
+# spec/dummy/ (review wave f-x2-1/f-x2-2) provides that Rails-app context,
+# so `bundle exec packwerk check` runs to completion in CI and locally.
+#
+# The root package (package.yml, "tier 0") is now genuinely governed: the
+# five engine-substrate files (lib/wild.rb, engine.rb, configuration.rb,
+# error.rb, version.rb) are no longer excluded below, so Packwerk maps
+# them to the root package like everything else under lib/wild/. Every
+# per-namespace package.yml already declared a "." dependency (review
+# wave finding f-x2-2); before this file un-excluded the five substrate
+# files, that edge had nothing to resolve against and was dead config:
+# no forward violation had ever been produced by referencing e.g.
+# `Wild::Error` or `Wild.config` from inside a namespace, because
+# Packwerk's constant map didn't contain those files at all. Now it does,
+# and `bundle exec packwerk check` still reports 0 offenses with the "."
+# edge doing real work: it is what makes those ~750 substrate references
+# (Wild::Error subclasses, Wild.config, Wild::Configuration, Wild::Engine)
+# legal instead of newly-flagged.
+#
+# (An earlier draft of this comment attributed the previously-passing
+# `packwerk check` to the "." dependency edge and described violations as
+# each namespace reaching "forward" past its own module. That was wrong on
+# both counts: the edge was inert dead config until the exclusion above
+# was lifted, and any violation Packwerk would have reported was always a
+# namespace referencing its OWN top-level module constant or a fileless
+# sub-constant defined in its own lib/wild/<ns>.rb entry file, via the
+# hole described next, never a genuine cross-namespace or upward reach.)
+#
+# The ten `lib/wild/<namespace>.rb` entry files (module definition + a
+# require-aggregation preamble + a handful of `class << self` factory/
+# configuration methods that wire the namespace's own internals together,
+# e.g. Wild::Skillops.build) sit in `lib/wild/` itself, not inside their
+# namespace's own subdirectory, so Packwerk's directory-based package
+# resolution assigns them to the root package ('.') even though they are
+# functionally each namespace's own public surface. They are excluded
+# below for the same reason the five engine-substrate files used to be:
+# wiring code that is legitimately allowed to see the namespace it wires,
+# not a Zeitwerk-conformant per-class file. Declaring the edge as a root
+# package.yml dependency instead was considered and rejected: `dependencies:`
+# is package-wide, not per-file, so it would let every other root file
+# reach into that namespace too, silently widening the ADR-0003 graph
+# instead of just unblocking each namespace's own entry point.
+#
+# KNOWN ENFORCEMENT HOLE (review wave f-x2-5, investigated 2026-08-25,
+# not closed): because these ten entry files are excluded, Packwerk's
+# constant map does not contain `Wild::Skillops`, `Wild::CapabilityGate`,
+# `Wild::Introspection`, `Wild::Analyzers::Permission::LoadError`, or any
+# other constant those files define at the module level. A boundary
+# violation that only goes through one of those module-level entry points
+# (rather than a class living in the namespace's own subdirectory) is
+# invisible to `packwerk check` and will NOT block CI. Moving each entry
+# file's module-level methods/constants into a namespace-owned subfile
+# (e.g. a `Facade` class under lib/wild/<ns>/) so the entry file becomes
+# a thin `require`-only shim was investigated as a cheap fix and rejected
+# for this pass: it is mechanical for a small namespace (skillops.rb, one
+# module method + one facade class) but touches all nine remaining entry
+# files (609 combined lines) and every call site across the ~750
+# substrate/namespace references audited above, well past what a single
+# fix-up commit should carry. Tracked as a follow-up in CHANGELOG.md.
 
 include:
   - "lib/wild/**/*.rb"
@@ -19,11 +73,16 @@ include:
 exclude:
   - "spec/**/*"
   - "lib/generators/**/*"
-  - "lib/wild/version.rb"
-  - "lib/wild/error.rb"
-  - "lib/wild/configuration.rb"
-  - "lib/wild/engine.rb"
-  - "lib/wild.rb"
+  - "lib/wild/hooks.rb"
+  - "lib/wild/skillops.rb"
+  - "lib/wild/telemetry/collector.rb"
+  - "lib/wild/telemetry/pipeline.rb"
+  - "lib/wild/telemetry/analysis.rb"
+  - "lib/wild/analyzers/permission.rb"
+  - "lib/wild/analyzers/test_flakes.rb"
+  - "lib/wild/capability_gate.rb"
+  - "lib/wild/introspection.rb"
+  - "lib/wild/admin_tools.rb"
 
 # Root + per-namespace packages.
 # Each entry is a glob that matches a directory containing a package.yml.

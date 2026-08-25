@@ -43,10 +43,10 @@ engineer-waived deeper layers whose *rationale* now needs re-justification.
 | Layer | Status |
 |---|---|
 | L1 git hooks + CI | **Installed** — ci/release/codeql workflows; plain-shell hooks + installer; dependabot. lint/test/security block on main+PRs. |
-| L2 static/lint/sec | **Installed** — RuboCop, Packwerk (+11 package.yml), brakeman, bundler-audit, CodeQL. Packwerk `boundary` + brakeman are `continue-on-error` until `spec/dummy/` lands (P2). |
-| L3 unit | **Installed** — 2988 ex / 10 namespaces; SimpleCov `minimum_coverage 85` enforced under COVERAGE=1; Codecov live. |
+| L2 static/lint/sec | **Installed**: RuboCop, Packwerk (`validate` + `+11 package.yml` `check`, both required, no `continue-on-error`), brakeman (scans `lib/` since review-wave f-x2-1, previously scanned the then-empty `spec/dummy/`), bundler-audit, CodeQL. `spec/dummy/` landed (review-wave f-x2-1/f-x2-2), so this row's prior "continue-on-error until spec/dummy/ lands" is stale, corrected here. |
+| L3 unit | **Installed**: 3083+ ex / 10 namespaces (review wave, 2026-08-25; up from 2988 at this audit's original date); SimpleCov `minimum_coverage 85` enforced under COVERAGE=1; Codecov live. |
 | L3 mutation / property / CRAP | **Waived (engineer policy)** — rationale now stale (see P1-2). |
-| L4 integration | **Waived (P2)** — no `spec/dummy/` yet. |
+| L4 integration | **Installed**: `spec/dummy/` landed (review-wave f-x2-1/f-x2-2); row below at P2 gaps is stale on this point. |
 | L5 SAST (CodeQL) | **Installed** — live gate on main. |
 | L5 perf / chaos / a11y | **Waived** (perf/chaos v0.2.0; a11y permanent — no UI). |
 | L6 BDD/Gherkin | **Waived (v0.2.0)** — stopwatch test substitutes. |
@@ -71,8 +71,8 @@ engineer-waived deeper layers whose *rationale* now needs re-justification.
 
 ## P2 gaps
 
-3. **`spec/dummy/` absent** (Role 8 / `wild-rvv` P2) — keeps Packwerk `boundary` + brakeman
-   on `continue-on-error` (present but non-blocking). Expected; engineer-waived.
+3. ~~**`spec/dummy/` absent**~~ **CLOSED** (review-wave f-x2-1/f-x2-2, 2026-08-25): `spec/dummy/`
+   landed; Packwerk `boundary` + brakeman are required, blocking checks, not `continue-on-error`.
 4. **TESTING.md doc drift** — `## Installed gates` + `## Last audit` written at P0 are
    factually wrong (one-spec framing, package.yml "ABSENT", CODECOV_TOKEN "missing", CodeQL
    "not merged"). **Observational sections fixed by this audit.** The `## Classification`
