@@ -15,9 +15,10 @@ name: 'MiniMax Code Review'
 # blocks a merge. The deterministic gate stays the CI workflow (RuboCop,
 # bundler-audit, RSpec across Ruby 3.2/3.3/3.4, Codecov) plus CodeQL. These
 # lanes translate REVIEW.md, the repository's reviewer law, into diff-scoped
-# human-readable guidance. Both prompts are distillations of REVIEW.md; the
-# action fetches the PR diff via the API and never checks out or executes PR
-# code.
+# human-readable guidance. Both prompts are distillations of REVIEW.md. Neither
+# job runs actions/checkout, so no PR code is checked out or executed by this
+# workflow; the pinned action is configured to read the diff over the API, which
+# is a property of that action rather than of anything visible here.
 #
 # The action is our maintained fork (jeremylongshore/minimax-code-review),
 # SHA-pinned per supply-chain policy: it adds per-reviewer sticky comments
@@ -29,8 +30,10 @@ name: 'MiniMax Code Review'
 # forked PR never receives the MINIMAX_API_KEY secret. The same-repo guard below
 # skips fork PRs cleanly instead of failing on an empty key.
 #
-# Activation (owner secret/variable actions). ALL THREE ARE ALREADY SET on this
-# repository, so this workflow is live on merge:
+# Activation (owner secret/variable actions). These three are expected to be set
+# on this repository; where they are, both lanes are expected to run on merge.
+# Repository secrets and variables are not visible in the diff, so treat this as
+# the activation contract, not as evidence that it is already satisfied:
 #   1. Repo secret   MINIMAX_API_KEY        = MiniMax API key
 #   2. Repo variable ENABLE_MINIMAX_REVIEW  = true        (kill switch, both lanes)
 #   3. Repo variable MINIMAX_MODEL          = MiniMax-M3  (exact id the token serves)
