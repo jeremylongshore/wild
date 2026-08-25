@@ -111,7 +111,7 @@ RSpec.describe "Edge cases" do
     end
   end
 
-  describe "Concurrent-style sequential updates" do
+  describe "Rapid sequential updates (single caller, no threads)" do
     it "handles many rapid updates without state corruption" do
       registry.registrar.register(make_skill(name: "rapid.update", version: "1.0.0"))
       10.times do |i|

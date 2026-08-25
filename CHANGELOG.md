@@ -41,6 +41,10 @@ section splits into a separate file.
 - Root `package.yml` + ten per-namespace `package.yml` files encoding the ADR-0003 dependency contract; `packwerk.yml` lists each package path
 - 6-doc enterprise planning set under `000-docs/`
 
+### Wild::Skillops
+
+- **`Registry::Store`'s class comment no longer claims "atomic read/write access"** (review wave, finding f-l07-1). It now states the actual guarantee: single-process, non-concurrent, no atomicity/durability/thread-safety beyond plain Ruby `Hash` semantics, and names the unguarded check-then-set race in `#add` (f-l07-2) instead of implying it is safe. `tests/RTM.md` REQ-006 moves from Uncovered to Partial with a spec citation. The "Concurrent-style sequential updates" spec is renamed to "Rapid sequential updates (single caller, no threads)" (f-l07-4) since it never used a `Thread`. `Wild.config.skillops.enabled` remaining a no-op gate (f-l07-3) is a separate, still-open owner decision, not touched here. Advances bead "F5: Downgrade Wild::Skillops claims to match what the code can actually back up" (the `enabled` gate remains open).
+
 ### Wild::Introspection
 
 - Moved 23 source files from `wild-rails-safe-introspection-mcp/lib/wild_rails_safe_introspection/`

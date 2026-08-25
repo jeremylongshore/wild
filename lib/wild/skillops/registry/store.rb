@@ -4,7 +4,14 @@ module Wild
   module Skillops
     module Registry
       # In-memory store for registry entries.
-      # Enforces capacity limits and provides atomic read/write access.
+      #
+      # Enforces capacity limits. Single-process, non-concurrent: it makes no
+      # atomicity, durability, or thread-safety guarantees beyond whatever
+      # Ruby's Hash already provides. #add is a plain check-then-set (read
+      # @entries.size, then write) with no Mutex/Monitor guarding it, so two
+      # callers racing near max_skills can both pass the capacity check
+      # before either mutation lands. Per council F5 / package.yml: "NO
+      # atomicity, NO durability claims."
       class Store
         def initialize
           @entries = {}

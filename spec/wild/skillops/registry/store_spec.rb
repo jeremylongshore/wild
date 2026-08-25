@@ -77,4 +77,21 @@ RSpec.describe Wild::Skillops::Registry::Store do
       expect(store.names.size).to eq(2)
     end
   end
+
+  describe "class-level documentation truth (review wave f-l07-1 / f-l07-2)" do
+    let(:class_comment) do
+      source_file = described_class.instance_method(:add).source_location.first
+      lines = File.readlines(source_file)
+      class_line = lines.index { |l| l.include?("class Store") }
+      lines[0...class_line].select { |l| l.strip.start_with?("#") }.join
+    end
+
+    it "no longer claims Store provides atomic read/write access" do
+      expect(class_comment).not_to match(/provides? atomic/i)
+    end
+
+    it "states the actual guarantee: no atomicity/durability beyond plain Hash semantics" do
+      expect(class_comment).to match(/no.+(atomicity|durability|thread-safety)/i)
+    end
+  end
 end
