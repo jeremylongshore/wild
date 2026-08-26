@@ -59,11 +59,6 @@ module Wild
     # 4. ALLOW
     #
     # See also: 003-TQ-STND-governance-model.md (fail-closed, no implicit grants)
-    # rubocop:disable Metrics/ClassLength -- carries the full decision tree AND
-    # the f-l08 addendum's audit-failure logging helpers (log_audit_failure/
-    # write_stderr/build_audit_failure_message); those exist only to serve this
-    # class's own never-raises guarantee, so splitting them out would separate
-    # the guarantee from its enforcement.
     class Evaluator
       include SafeCoercion
 
@@ -243,58 +238,15 @@ module Wild
         # before StandardError, exactly as the schema-conformance case does.
         raise
       rescue StandardError => e
-        log_audit_failure(e, result)
+        Wild::AuditFailureLog.record(
+          tag: "capability_gate",
+          error: e,
+          detail: "audit emission failed",
+          suffix: " (caller=#{result.caller_id.inspect} capability=#{result.capability_name.inspect} " \
+                  "reason=#{result.reason.inspect})"
+        )
         nil
-      end
-
-      # Log an audit emission failure without ever raising (this method's own
-      # caller, emit_audit's rescue, must not raise either — that would defeat
-      # the never-raises guarantee). f-l08-4: Wild.config.audit_logger defaults
-      # to nil, so without a fallback a single writer failure was terminally
-      # silent while ALLOW/DENY was still returned.
-      #
-      # f-l08 addendum item 1: `Kernel#warn` is a no-op when `$VERBOSE` is nil
-      # (`ruby -W0`, `RUBYOPT=-W0`, a caller that runs under `silence_warnings`)
-      # — the specs here only ever passed because spec_helper.rb sets
-      # `config.warnings = false`, which does NOT affect `$VERBOSE`. Writing to
-      # `$stderr` directly keeps "audit failure is never doubly silent" true
-      # regardless of the process's warning-verbosity setting; only an
-      # unwritable $stderr defeats this last resort.
-      def log_audit_failure(error, result)
-        message = build_audit_failure_message(error, result)
-        logger = Wild.config.audit_logger
-        logger.respond_to?(:error) ? logger.error(message) : write_stderr(message)
-      rescue StandardError
-        # The configured logger raised from #error, or message construction
-        # itself raised (message stays nil in that case — Ruby has already
-        # declared the local by the time this rescue runs). Reuse the message
-        # we already built when we have one instead of rebuilding it (which
-        # would risk raising the exact same way twice); fall back to a
-        # class-only line when we don't.
-        write_stderr(message || "[wild:capability_gate] audit emission failed: #{error.class}")
-      end
-
-      # @api private
-      # rubocop:disable Style/StderrPuts -- deliberate: `warn` is a Kernel#warn
-      # no-op under $VERBOSE = nil (ruby -W0, silence_warnings), which is
-      # exactly the f-l08 addendum item 1 finding this bypasses.
-      def write_stderr(line)
-        $stderr.puts(line)
-      rescue StandardError
-        nil
-      end
-      # rubocop:enable Style/StderrPuts
-
-      # error.class is always safe; error.message is guarded via safe_message
-      # (a pathological exception whose #message raises must not turn a
-      # should-have-logged into terminal silence). Armstrong F2 fast-follow
-      # finding 4 (wild-wxk).
-      def build_audit_failure_message(error, result)
-        "[wild:capability_gate] audit emission failed: #{error.class}: #{safe_message(error)} " \
-          "(caller=#{result.caller_id.inspect} capability=#{result.capability_name.inspect} " \
-          "reason=#{result.reason.inspect})"
       end
     end
-    # rubocop:enable Metrics/ClassLength
   end
 end
