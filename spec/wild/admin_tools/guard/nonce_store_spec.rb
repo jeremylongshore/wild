@@ -7,13 +7,13 @@ RSpec.describe Wild::AdminTools::Guard::NonceStore do
 
   after { store.stop_sweep! }
 
-  def build_entry(nonce: "wnc_abc123", consumed: false)
+  def build_entry(nonce: "wnc_abc123", consumed: false, expires_at: Time.now.utc + 30)
     Wild::AdminTools::Guard::NonceEntry.new(
       nonce: nonce,
       binding_hash: "deadbeef",
       action_name: "retry_job",
       caller_id: "agent:1",
-      expires_at: Time.now.utc + 30,
+      expires_at: expires_at,
       consumed: consumed
     )
   end
@@ -73,7 +73,7 @@ RSpec.describe Wild::AdminTools::Guard::NonceStore do
     context "for a stored, unconsumed nonce" do
       it "consumes it and returns true" do
         store.store(build_entry)
-        expect(store.consume_if_unconsumed!("wnc_abc123")).to be(true)
+        expect(store.consume_if_unconsumed!("wnc_abc123")).to eq(:consumed)
         expect(store.fetch("wnc_abc123").consumed).to be(true)
       end
     end
@@ -81,14 +81,20 @@ RSpec.describe Wild::AdminTools::Guard::NonceStore do
     context "for an already-consumed nonce" do
       it "returns false without raising, instead of the old consume! which returned true again" do
         store.store(build_entry(consumed: true))
-        expect(store.consume_if_unconsumed!("wnc_abc123")).to be(false)
+        expect(store.consume_if_unconsumed!("wnc_abc123")).to eq(:already_used)
       end
     end
 
     context "for an unknown nonce" do
       it "returns false" do
-        expect(store.consume_if_unconsumed!("wnc_ghost")).to be(false)
+        expect(store.consume_if_unconsumed!("wnc_ghost")).to eq(:not_found)
       end
+    end
+
+    it "rejects and removes an expired nonce inside the atomic operation" do
+      store.store(build_entry(expires_at: Time.now.utc - 1))
+      expect(store.consume_if_unconsumed!("wnc_abc123")).to eq(:expired)
+      expect(store.fetch("wnc_abc123")).to be_nil
     end
 
     def race_consume(thread_count: 16)
@@ -108,7 +114,7 @@ RSpec.describe Wild::AdminTools::Guard::NonceStore do
     it "lets exactly one of many concurrent callers win (finding f-l10-1)" do
       50.times do
         store.store(build_entry)
-        expect(race_consume.count(true)).to eq(1)
+        expect(race_consume.count(:consumed)).to eq(1)
         store.clear!
       end
     end

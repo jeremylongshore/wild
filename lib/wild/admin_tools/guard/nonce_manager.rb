@@ -39,25 +39,15 @@ module Wild
         end
 
         def validate_and_consume!(nonce, action_name, params, caller_id)
-          entry = @store.fetch(nonce)
-          return failure("nonce_not_found") unless entry
-
-          if entry.expires_at < Time.now.utc
-            @store.remove(nonce)
-            return failure("nonce_expired")
+          # The store executes the expiry check, replay check, binding check,
+          # and consume under one mutex. In particular, a replay remains a
+          # replay even when its binding also differs, preserving the original
+          # audit semantics and not turning a consumed nonce into a binding
+          # oracle.
+          outcome = @store.consume_if_unconsumed!(nonce) do |entry|
+            binding_failure_reason(entry, action_name, params, caller_id)
           end
-
-          internal_reason = binding_failure_reason(entry, action_name, params, caller_id)
-          return failure(internal_reason) if internal_reason
-
-          # The "already consumed?" check and the consume itself must happen
-          # as one atomic compare-and-set (Guard::NonceStore#consume!, not
-          # #fetch then a separate #consume!) so that when N threads race to
-          # confirm the same nonce, exactly one gets `valid: true` and the
-          # rest fail here with nonce_already_used, instead of every thread
-          # that read `entry.consumed == false` before any of them called
-          # consume! all succeeding (finding f-l10-1).
-          return failure("nonce_already_used") unless @store.consume_if_unconsumed!(nonce)
+          return failure(failure_reason_for(outcome)) unless outcome == :consumed
 
           { valid: true }
         end
@@ -81,6 +71,14 @@ module Wild
 
         def failure(internal_reason)
           { valid: false, client_reason: CLIENT_FAILURE_REASON, internal_reason: internal_reason }
+        end
+
+        def failure_reason_for(outcome)
+          {
+            not_found: "nonce_not_found",
+            expired: "nonce_expired",
+            already_used: "nonce_already_used"
+          }.fetch(outcome, outcome.to_s)
         end
       end
     end

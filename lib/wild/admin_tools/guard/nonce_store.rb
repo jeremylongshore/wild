@@ -21,12 +21,15 @@ module Wild
           @mutex = Mutex.new
           @sweep_cv = ConditionVariable.new
           @running = false
+          @stopping = false
+          @restart_requested = false
           @sweep_thread = nil
         end
 
         def store(entry)
           @mutex.synchronize do
             @entries[entry.nonce] = entry
+            @restart_requested = true if @stopping
             start_sweep_thread_locked
           end
         end
@@ -35,23 +38,38 @@ module Wild
           @mutex.synchronize { @entries[nonce] }
         end
 
+        # rubocop:disable Naming/PredicateMethod -- retained compatibility
+        # API; it is a mutator whose boolean reports whether it consumed.
         def consume!(nonce)
-          @mutex.synchronize { unsafe_consume!(nonce) }
+          consume_if_unconsumed!(nonce) == :consumed
         end
+        # rubocop:enable Naming/PredicateMethod
 
-        # Atomic compare-and-set: checks "not already consumed" and marks the
-        # entry consumed inside a single mutex acquisition, closing the
-        # fetch/check/consume! race that let concurrent confirms of the same
-        # nonce all pass (finding f-l10-1). Returns false, never raises, when
-        # the nonce is missing or already consumed (the caller cannot tell
-        # those two apart from the return value alone, which is fine because
-        # NonceManager only needs "did I win the race", not "why not").
+        # Atomically validate and consume a nonce. The optional block returns
+        # nil when the entry binding is acceptable, or a failure reason when
+        # it is not. Expiry, consumed state, binding validation, and the write
+        # all happen under one mutex acquisition, so a nonce cannot become
+        # expired or consumed between validation and consumption.
+        #
+        # Returns :consumed, :not_found, :expired, :already_used, or the
+        # failure reason supplied by the block.
         def consume_if_unconsumed!(nonce)
           @mutex.synchronize do
             entry = @entries[nonce]
-            next false if entry.nil? || entry.consumed
+            next :not_found if entry.nil?
+
+            if entry.expires_at < Time.now.utc
+              @entries.delete(nonce)
+              next :expired
+            end
+
+            next :already_used if entry.consumed
+
+            failure_reason = yield(entry) if block_given?
+            next failure_reason if failure_reason
 
             unsafe_consume!(nonce)
+            :consumed
           end
         end
 
@@ -74,19 +92,18 @@ module Wild
         def stop_sweep!
           thread = @mutex.synchronize do
             @running = false
+            @stopping = true
             @sweep_cv.broadcast
             @sweep_thread
           end
           thread&.join(1)
-          @sweep_thread = nil
         end
 
         private
 
         # Rewrites the entry as consumed and returns true. Callers MUST hold
-        # @mutex already (this method does not lock), so it can be reused by
-        # both #consume! (unconditional) and #consume_if_unconsumed! (guarded)
-        # without acquiring the mutex twice or re-checking existence.
+        # @mutex already. It is deliberately private so public callers cannot
+        # bypass the single-use compare-and-set in #consume_if_unconsumed!.
         #
         # rubocop:disable Naming/PredicateMethod -- this is a mutator (bang
         # suffix, rewrites @entries), not a query; "did it exist to mutate"
@@ -112,7 +129,7 @@ module Wild
         # both observe `@running == false` and each spawn their own sweeper
         # (finding f-l10-9).
         def start_sweep_thread_locked
-          return if @running
+          return if @running || @stopping
 
           @running = true
           @sweep_thread = Thread.new do
@@ -121,6 +138,14 @@ module Wild
               while @running
                 @sweep_cv.wait(@mutex, 10)
                 sweep_expired_locked if @running
+              end
+            ensure
+              if Thread.current.equal?(@sweep_thread)
+                @sweep_thread = nil
+                @stopping = false
+                restart = @restart_requested
+                @restart_requested = false
+                start_sweep_thread_locked if restart
               end
             end
           end

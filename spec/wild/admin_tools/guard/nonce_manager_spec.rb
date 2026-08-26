@@ -63,6 +63,15 @@ RSpec.describe Wild::AdminTools::Guard::NonceManager do
         result = manager.validate_and_consume!(nonce, action_name, params, caller_id)
         expect(result[:valid]).to be(false)
       end
+
+      it "keeps the replay reason when a replay also has a bad binding" do
+        nonce = manager.generate(action_name, params, caller_id)
+        manager.validate_and_consume!(nonce, action_name, params, caller_id)
+
+        result = manager.validate_and_consume!(nonce, "discard_job", { job_id: "other" }, "agent:impostor")
+
+        expect(result).to include(valid: false, internal_reason: "nonce_already_used")
+      end
     end
 
     context "when the nonce has expired" do
