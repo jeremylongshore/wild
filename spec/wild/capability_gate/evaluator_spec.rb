@@ -364,6 +364,62 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
       end
     end
 
+    # f-l08 addendum item 10 + 14: prove the INVARIANT — the prerequisite
+    # checker and the audit trail see the SAME coerced context — rather than
+    # merely asserting "hostile input still returns ALLOW". Uses a capability
+    # with a config_value prerequisite (unlike basic_introspection, which has
+    # none) so a hostile context actually reaches ConfigValueChecker, the
+    # collaborator that used to crash on it.
+    context "with a hostile context reaching a config_value prerequisite" do
+      # rubocop:disable RSpec/MultipleExpectations, RSpec/ExampleLength -- one coherent invariant: checker + audit see the same coerced context
+      it "denies on a legible business reason (checker sees the coerced context, not the raw hostile one)" do
+        attestation_file = Tempfile.new("safety-attestation")
+        prereqs = [
+          Wild::CapabilityGate::Prerequisite.new(type: :file_exists, path: attestation_file.path),
+          Wild::CapabilityGate::Prerequisite.new(type: :config_value, key: "admin_tools_enabled", value: true)
+        ]
+        capability = Wild::CapabilityGate::Capability.new(
+          name: :gated_capability, description: "Test gated capability",
+          risk_level: :critical, prerequisites: prereqs
+        )
+        grants = [
+          Wild::CapabilityGate::Grant.new(caller_id: "service-account:admin-agent", capabilities: [:gated_capability])
+        ]
+        ev = described_class.new(
+          registry: Wild::CapabilityGate::Registry.new([capability]),
+          grants: grants,
+          audit_writer: audit_writer
+        )
+
+        result = ev.evaluate(
+          caller_id: "service-account:admin-agent",
+          capability_name: :gated_capability,
+          context: "not-a-hash"
+        )
+
+        # BEFORE the fix: ConfigValueChecker#lookup called `context.key?` on
+        # the raw String, raised NoMethodError, and its own rescue masked that
+        # as a generic "config_value check failed: NoMethodError" — while the
+        # audit trail recorded a SEPARATELY (safely) coerced `{}` for the same
+        # evaluation, an inconsistency between what was decided on and what
+        # was audited. AFTER the fix: the checker sees the SAME coerced Hash
+        # the audit trail records, so it fails on a legible "key missing"
+        # business reason instead of an internal-error message.
+        expect(result).to be_denied
+        expect(result.reason).to eq(:prerequisite_not_met)
+        expect(result.details).to include("admin_tools_enabled")
+        expect(result.details).not_to include("NoMethodError")
+
+        events = parse_audit_log
+        expect(events.size).to eq(1)
+        expected_context = JSON.parse(JSON.generate(Wild::CapabilityGate::Audit::Event.coerce_context("not-a-hash")))
+        expect(events.first.dig("extra", "context")).to eq(expected_context)
+      ensure
+        attestation_file.close!
+      end
+      # rubocop:enable RSpec/MultipleExpectations, RSpec/ExampleLength
+    end
+
     context "when no audit writer is configured" do
       it "does not write any audit log" do
         ev = described_class.from_files(
@@ -404,8 +460,8 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
       # log_audit_failure's `return unless logger.respond_to?(:error)` fired
       # and there was nowhere else the failure was recorded, while the CHANGELOG
       # claimed only a simultaneous writer-AND-logger outage was terminal.
-      # Kernel#warn ($stderr) is now the default-config fallback.
-      it "falls back to Kernel#warn on $stderr when no audit_logger is configured" do
+      # Writing directly to $stderr is now the default-config fallback.
+      it "falls back to $stderr when no audit_logger is configured" do
         broken_writer = instance_double(Wild::CapabilityGate::Audit::JsonLinesWriter)
         allow(broken_writer).to receive(:write).and_raise(IOError, "disk full")
 
@@ -419,7 +475,43 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
           ev.evaluate(caller_id: "service-account:introspection-agent", capability_name: :basic_introspection)
         end.to output(/\[wild:capability_gate\] audit emission failed: IOError: disk full/).to_stderr
       end
+
+      # f-l08 addendum item 1: `Kernel#warn` is a NO-OP when `$VERBOSE` is nil
+      # (`ruby -W0`, `RUBYOPT=-W0`, a caller wrapped in `Kernel#silence_warnings`)
+      # — every example in this file only ever proved the fallback worked
+      # because spec_helper.rb sets `config.warnings = false`, which affects
+      # RSpec's own deprecation-warning noise, NOT `$VERBOSE`. This example
+      # pins the fix directly: write to $stderr with $VERBOSE forced to nil,
+      # the exact condition under which `warn(...)` would have silently done
+      # nothing and reopened the f-l08-4 hole.
+      it "still writes to $stderr when $VERBOSE is nil (Kernel#warn would be a silent no-op here)" do
+        broken_writer = instance_double(Wild::CapabilityGate::Audit::JsonLinesWriter)
+        allow(broken_writer).to receive(:write).and_raise(IOError, "disk full")
+        ev = evaluator_with_broken_writer(broken_writer)
+
+        with_verbose(nil) do
+          expect do
+            ev.evaluate(caller_id: "service-account:introspection-agent", capability_name: :basic_introspection)
+          end.to output(/\[wild:capability_gate\] audit emission failed: IOError: disk full/).to_stderr
+        end
+      end
     end
+  end
+
+  def evaluator_with_broken_writer(broken_writer)
+    described_class.new(
+      registry: Wild::CapabilityGate::Registry.from_file(capabilities_path),
+      grants: Wild::CapabilityGate::Evaluator::GrantLoader.load_file(grants_path),
+      audit_writer: broken_writer
+    )
+  end
+
+  def with_verbose(value)
+    original = $VERBOSE
+    $VERBOSE = value
+    yield
+  ensure
+    $VERBOSE = original
   end
 
   def build_evaluator_with_prereq(prereq_path:)

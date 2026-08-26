@@ -216,14 +216,28 @@ RSpec.describe Wild::CapabilityGate::Gate do
     # Audit::Event#initialize's `Hash(context)`, get swallowed by the
     # evaluator's StandardError rescue, and (with the default nil
     # audit_logger) leave the ALLOW result with zero audit lines AND zero log
-    # lines. safe_context now coerces defensively before Event construction.
+    # lines. Audit::Event.coerce_context now coerces defensively before Event
+    # construction.
+    #
+    # f-l08 addendum item 8: the original matrix had a dead ["nil", nil] row —
+    # `Hash(nil)` succeeds (returns {}) so it never exercises the placeholder
+    # path this describe block is about — and a wrong assumption that a
+    # pairs-shaped Array converts. Verified: `Kernel#Hash` raises TypeError for
+    # EVERY non-empty Array, pairs-shaped or not (`Hash([["a",1]])` raises
+    # exactly like `Hash(%w[x y])` does — Array implements neither #to_hash nor
+    # does Hash() fall back to #to_h). The "a pairs-shaped Array" row below
+    # replaces the dead one and proves that case degrades safely too, the same
+    # as any other non-empty Array.
     [
       ["a String", "not-a-hash"],
       ["a non-pair Array", %w[x y]],
-      ["nil", nil],
+      ["a pairs-shaped Array", [%w[a 1], %w[b 2]]],
       ["an object whose #to_hash raises", Class.new { def to_hash = raise("boom") }.new]
     ].each do |label, hostile_context|
-      it "writes exactly one audit line per evaluate for #{label}" do
+      # f-l08 addendum item 14: pin the invariant — one audit line, whose
+      # extra.context is exactly Audit::Event.coerce_context(hostile_context)
+      # — instead of only the weaker "hostile input still returns ALLOW".
+      it "writes exactly one audit line per evaluate for #{label}, with the coerced context recorded" do
         log = Tempfile.new(["gate-context", ".jsonl"])
         gate = described_class.new(config_path: config_path, audit_log_path: log.path)
 
@@ -231,8 +245,11 @@ RSpec.describe Wild::CapabilityGate::Gate do
           caller: "svc:a", capability: :basic_introspection, context: hostile_context
         )
 
+        lines = File.readlines(log.path)
         expect(result).to be_allowed
-        expect(File.readlines(log.path).size).to eq(1)
+        expect(lines.size).to eq(1)
+        expected_context = JSON.parse(JSON.generate(Wild::CapabilityGate::Audit::Event.coerce_context(hostile_context)))
+        expect(JSON.parse(lines.first).dig("extra", "context")).to eq(expected_context)
       ensure
         log.close!
       end

@@ -366,24 +366,16 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
   end
 
   describe "audit-event schema validation toggle (F2, wild-rvv.4.1.2)" do
-    # A deliberately non-conforming event injected at emit time. When validation
-    # is on (dev/test), the gate must SURFACE it (a non-conforming event is a
-    # developer bug); when off (prod default), the gate must NOT raise — its
-    # never-raises fail-closed guarantee is a production guarantee.
-    let(:bad_event) do
-      instance_double(Wild::CapabilityGate::Audit::Event, to_h: { "outcome" => "maybe" })
-    end
-
+    # Shared by every context below (f-l08 addendum item 9: previously this
+    # exact evaluator/evaluate! pair was independently redefined a FIFTH time
+    # a few contexts down for the json_schemer-absent scenario; defined once
+    # here instead).
     let(:evaluator) do
       Wild::CapabilityGate::Evaluator.from_files(
         capabilities_path: capabilities_path,
         grants_path: grants_path,
         audit_writer: collecting_writer
       )
-    end
-
-    before do
-      allow(Wild::CapabilityGate::Audit::Event).to receive(:from_evaluation).and_return(bad_event)
     end
 
     def evaluate!
@@ -393,104 +385,126 @@ RSpec.describe "Wild::CapabilityGate F2 audit liveness" do
       )
     end
 
-    context "when validate_audit_events = true" do
-      before { Wild.configure { |c| c.capability_gate.validate_audit_events = true } }
-
-      it "raises AuditSchemaError out of evaluate (surfaces the developer bug, not swallowed)" do
-        expect { evaluate! }.to raise_error(Wild::CapabilityGate::AuditSchemaError)
+    context "with a non-conforming event injected at emit time" do
+      # A deliberately non-conforming event injected at emit time. When validation
+      # is on (dev/test), the gate must SURFACE it (a non-conforming event is a
+      # developer bug); when off (prod default), the gate must NOT raise — its
+      # never-raises fail-closed guarantee is a production guarantee. The
+      # from_evaluation stub is scoped to THIS context only (not the describe
+      # block above) so the json_schemer-absent context below, which needs a
+      # real Event to reach SchemaValidator, is unaffected by it.
+      let(:bad_event) do
+        instance_double(Wild::CapabilityGate::Audit::Event, to_h: { "outcome" => "maybe" })
       end
 
-      it "does not write the non-conforming event" do
+      before do
+        allow(Wild::CapabilityGate::Audit::Event).to receive(:from_evaluation).and_return(bad_event)
+      end
+
+      context "when validate_audit_events = true" do
+        before { Wild.configure { |c| c.capability_gate.validate_audit_events = true } }
+
+        it "raises AuditSchemaError out of evaluate (surfaces the developer bug, not swallowed)" do
+          expect { evaluate! }.to raise_error(Wild::CapabilityGate::AuditSchemaError)
+        end
+
+        it "does not write the non-conforming event" do
+          begin
+            evaluate!
+          rescue Wild::CapabilityGate::AuditSchemaError
+            nil
+          end
+          expect(collecting_writer.events).to be_empty
+        end
+      end
+
+      context "when validate_audit_events = false (prod default posture)" do
+        before { Wild.configure { |c| c.capability_gate.validate_audit_events = false } }
+
+        it "does NOT raise — fail-closed never-raises guarantee preserved" do
+          expect { evaluate! }.not_to raise_error
+        end
+
+        it "still writes the event (validation off ≠ audit off)" do
+          evaluate!
+          expect(collecting_writer.events.size).to eq(1)
+        end
+      end
+
+      context "with :auto (default) — keys off Wild.config.environment" do
+        before { Wild.configure { |c| c.capability_gate.validate_audit_events = :auto } }
+
+        it "validates (raises) in :test" do
+          Wild.configure { |c| c.environment = :test }
+          expect { evaluate! }.to raise_error(Wild::CapabilityGate::AuditSchemaError)
+        end
+
+        it "skips validation (no raise) in :production" do
+          Wild.configure { |c| c.environment = :production }
+          expect { evaluate! }.not_to raise_error
+        end
+      end
+    end
+
+    # f-l08-2: validation enabled (default :auto is on in :development/:test,
+    # the default environment) but `json_schemer` is absent. This previously
+    # raised Wild::ConfigurationError from SchemaValidator's private `schemer`
+    # method, then got caught by emit_audit's blanket StandardError rescue and
+    # (with audit_logger nil by default) vanished: the evaluation returned
+    # ALLOW with zero audit event and zero log line. It must now surface
+    # loudly. f-l08 addendum item 12: the class raised is now
+    # AuditValidatorUnavailableError (a subclass of AuditSchemaError), not the
+    # gem-wide Wild::ConfigurationError, so DEVELOPER_ERRORS only needs to
+    # whitelist AuditSchemaError.
+    context "when json_schemer is not available (F2, f-l08-2)" do
+      before do
+        Wild::CapabilityGate::Audit::SchemaValidator.reset!
+        allow(Wild::CapabilityGate::Audit::SchemaValidator)
+          .to receive(:require).with("json_schemer").and_raise(LoadError)
+      end
+
+      after { Wild::CapabilityGate::Audit::SchemaValidator.reset! }
+
+      it "raises AuditValidatorUnavailableError out of Evaluator#evaluate (not swallowed to a silent ALLOW)" do
+        expect { evaluate! }.to raise_error(Wild::CapabilityGate::AuditValidatorUnavailableError, /json_schemer/)
+      end
+
+      # f-l08 addendum item 14: a prior version of this example pinned "zero
+      # audit events" as REQUIRED behavior. That over-specifies an incidental
+      # detail of where the raise happens to fire (before Audit::Event is
+      # even constructed), not a real contract. The actual invariant: evaluate!
+      # must never raise and then be indistinguishable from a quiet success.
+      # It already satisfies that by raising with a message naming the cause.
+      # If a future revision starts leaving a diagnostic trace before the
+      # raise, this only requires that trace to explain the abort (not read
+      # as an ordinary "allow"/"deny" outcome), not that no trace exists.
+      it "raises without ever looking like a silent success; any trace it leaves explains the abort" do
         begin
           evaluate!
-        rescue Wild::CapabilityGate::AuditSchemaError
+        rescue Wild::CapabilityGate::AuditValidatorUnavailableError
           nil
         end
-        expect(collecting_writer.events).to be_empty
-      end
-    end
-
-    context "when validate_audit_events = false (prod default posture)" do
-      before { Wild.configure { |c| c.capability_gate.validate_audit_events = false } }
-
-      it "does NOT raise — fail-closed never-raises guarantee preserved" do
-        expect { evaluate! }.not_to raise_error
+        collecting_writer.events.each do |event|
+          expect(event["outcome"]).not_to be_in(%w[allow deny])
+        end
       end
 
-      it "still writes the event (validation off ≠ audit off)" do
-        evaluate!
-        expect(collecting_writer.events.size).to eq(1)
+      # f-l08 addendum item 2b: Gate#initialize now probes the validator at
+      # construction time (when an audit_log_path is given), so this scenario
+      # now raises at Gate.new — earlier than the previous version of this
+      # example (which constructed the Gate first, then asserted the raise
+      # came from #evaluate).
+      it "raises out of Gate.new at construction time (boot-time probe, f-l08-3 extension)" do
+        log = Tempfile.new(["gate-schema-config", ".jsonl"])
+
+        expect do
+          Wild::CapabilityGate::Gate.new(
+            config_path: File.join(fixtures_dir, "config"), audit_log_path: log.path
+          )
+        end.to raise_error(Wild::CapabilityGate::AuditValidatorUnavailableError, /json_schemer/)
+      ensure
+        log.close!
       end
-    end
-
-    context "with :auto (default) — keys off Wild.config.environment" do
-      before { Wild.configure { |c| c.capability_gate.validate_audit_events = :auto } }
-
-      it "validates (raises) in :test" do
-        Wild.configure { |c| c.environment = :test }
-        expect { evaluate! }.to raise_error(Wild::CapabilityGate::AuditSchemaError)
-      end
-
-      it "skips validation (no raise) in :production" do
-        Wild.configure { |c| c.environment = :production }
-        expect { evaluate! }.not_to raise_error
-      end
-    end
-  end
-
-  # f-l08-2: validation enabled (default :auto is on in :development/:test,
-  # the default environment) but `json_schemer` is absent. This previously
-  # raised Wild::ConfigurationError from SchemaValidator's private `schemer`
-  # method, then got caught by emit_audit's blanket StandardError rescue and
-  # (with audit_logger nil by default) vanished: the evaluation returned
-  # ALLOW with zero audit event and zero log line. It must now surface loudly.
-  describe "audit-schema validator misconfigured (json_schemer absent, F2, f-l08-2)" do
-    let(:evaluator) do
-      Wild::CapabilityGate::Evaluator.from_files(
-        capabilities_path: capabilities_path,
-        grants_path: grants_path,
-        audit_writer: collecting_writer
-      )
-    end
-
-    before do
-      Wild::CapabilityGate::Audit::SchemaValidator.reset!
-      allow(Wild::CapabilityGate::Audit::SchemaValidator)
-        .to receive(:require).with("json_schemer").and_raise(LoadError)
-    end
-
-    after { Wild::CapabilityGate::Audit::SchemaValidator.reset! }
-
-    def evaluate!
-      evaluator.evaluate(
-        caller_id: "service-account:introspection-agent",
-        capability_name: :basic_introspection
-      )
-    end
-
-    it "raises Wild::ConfigurationError out of Evaluator#evaluate (not swallowed to a silent ALLOW)" do
-      expect { evaluate! }.to raise_error(Wild::ConfigurationError, /json_schemer/)
-    end
-
-    it "does not write an audit event for the aborted evaluation" do
-      begin
-        evaluate!
-      rescue Wild::ConfigurationError
-        nil
-      end
-      expect(collecting_writer.events).to be_empty
-    end
-
-    it "raises Wild::ConfigurationError out of Gate#evaluate too (f-l08-3 extension)" do
-      log = Tempfile.new(["gate-schema-config", ".jsonl"])
-      gate = Wild::CapabilityGate::Gate.new(
-        config_path: File.join(fixtures_dir, "config"), audit_log_path: log.path
-      )
-
-      expect { gate.evaluate(caller: "service-account:introspection-agent", capability: :basic_introspection) }
-        .to raise_error(Wild::ConfigurationError, /json_schemer/)
-    ensure
-      log.close!
     end
   end
 end

@@ -204,6 +204,89 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
     end
   end
 
+  describe ".coerce_context (f-l08 addendum items 4, 10, 11)" do
+    it "passes a real Hash through unchanged (by value)" do
+      expect(described_class.coerce_context({ "env" => "test" })).to eq({ "env" => "test" })
+    end
+
+    it "never returns the CALLER's own Hash object — dup'ing prevents the FrozenError trap" do
+      caller_hash = { "env" => "test" }
+      coerced = described_class.coerce_context(caller_hash)
+
+      expect(coerced).to eq(caller_hash)
+      expect(coerced).not_to equal(caller_hash)
+      expect(caller_hash).not_to be_frozen # the caller's own Hash is never touched
+    end
+
+    it "returns {} for nil (matches Hash(nil) semantics)" do
+      expect(described_class.coerce_context(nil)).to eq({})
+    end
+
+    it "degrades a String to a bounded, sanitized placeholder instead of raising" do
+      expect(described_class.coerce_context("not-a-hash")).to eq({ raw: '"not-a-hash"' })
+    end
+
+    it "degrades ANY non-empty Array — Kernel#Hash raises TypeError for pairs-shaped arrays too" do
+      expect(described_class.coerce_context(%w[x y])).to eq({ raw: "#<Array size=2>" })
+      expect(described_class.coerce_context([%w[a 1], %w[b 2]])).to eq({ raw: "#<Array size=2>" })
+    end
+
+    it "degrades an object whose #to_hash raises" do
+      hostile = Class.new { def to_hash = raise("boom") }.new
+      expect(described_class.coerce_context(hostile)).to eq({ raw: "#<#{hostile.class}>" })
+    end
+
+    it "redacts a secret-shaped token instead of writing it verbatim (item 4)" do
+      coerced = described_class.coerce_context("token=sk-live-abc123")
+      expect(coerced[:raw]).to include("REDACTED")
+      expect(coerced[:raw]).not_to include("sk-live-abc123")
+    end
+
+    it "does not call #inspect on a multi-megabyte String — slices before inspecting" do
+      huge = "x" * 5_000_000
+      expect { described_class.coerce_context(huge) }.not_to raise_error
+      coerced = described_class.coerce_context(huge)
+      expect(coerced[:raw].length).to be < 300
+    end
+
+    it "does not raise SystemStackError on a very deeply nested Array (never calls #inspect on it)" do
+      deep = 20_000.times.inject([]) { |acc, _| [acc] }
+      expect { described_class.coerce_context(deep) }.not_to raise_error
+      expect(described_class.coerce_context(deep)).to eq({ raw: "#<Array size=1>" })
+    end
+
+    it "replaces a Hash context containing NaN with a bounded, diagnosable summary" do
+      coerced = described_class.coerce_context({ "value" => Float::NAN, "other" => 1 })
+      expect(coerced).to eq({ truncated: true, keys: %w[value other] })
+    end
+
+    it "replaces an oversized Hash context (over the 2 KiB extra budget) with a bounded summary" do
+      big = { "blob" => "x" * 3000 }
+      coerced = described_class.coerce_context(big)
+      expect(coerced).to eq({ truncated: true, keys: ["blob"] })
+    end
+
+    it "keeps a small, JSON-safe Hash context exactly as given" do
+      small = { "env" => "test", "count" => 3 }
+      expect(described_class.coerce_context(small)).to eq(small)
+    end
+  end
+
+  describe "context construction never re-freezes the caller's own Hash (f-l08 addendum item 4)" do
+    it "does not raise FrozenError when the caller reuses the same context Hash for a second evaluation" do
+      shared_context = { "env" => "test" }
+      described_class.new(
+        timestamp: timestamp, subject: "svc:a", capability: "basic_introspection",
+        risk_level: "standard", outcome: "allow",
+        policy_version: Wild::CapabilityGate::Registry::UNKNOWN_POLICY_VERSION,
+        context: shared_context
+      )
+
+      expect(shared_context).not_to be_frozen
+      expect { shared_context["env"] = "production" }.not_to raise_error
+    end
+  end
+
   describe "outcome normalization (never raises — runs inside the rescue path)" do
     # F2: Event construction happens inside Evaluator#evaluate's rescue handler.
     # A raise here would re-open the silent-denial hole. So an unrecognized

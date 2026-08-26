@@ -104,6 +104,29 @@ RSpec.describe Wild::AdminTools::Identity::AuthenticatedPipeline do
       end
     end
 
+    # f-l08-3 (item 3): a CapabilityGate developer-bug signal must propagate
+    # through the whole T4 -> T3 chain (GateClient -> AuthenticatedPipeline)
+    # rather than being demoted to an ordinary "gate_denied" the way an actual
+    # gate malfunction is. authorize_via_gate only rescues Wild::AdminTools::
+    # GateError, so an AuditSchemaError re-raised by GateClient reaches here
+    # unrescued.
+    context "when gate raises a developer-bug error (AuditSchemaError)" do
+      let(:broken_gate) do
+        Object.new.tap do |g|
+          def g.evaluate(**_args)
+            raise Wild::CapabilityGate::AuditSchemaError, "audit event does not conform to audit_event.yml"
+          end
+        end
+      end
+      let(:gate_client) { Wild::AdminTools::Identity::GateClient.new(gate: broken_gate) }
+
+      it "propagates the developer error rather than demoting it to a gate_denied result" do
+        expect do
+          pipeline.call("inspect_job", { job_id: "job_1" }, { caller_id: "user_1" })
+        end.to raise_error(Wild::CapabilityGate::AuditSchemaError, /does not conform/)
+      end
+    end
+
     context "with mutation (two-phase)" do
       before do
         Wild::AdminTools.configuration.job_adapter.seed_job(
