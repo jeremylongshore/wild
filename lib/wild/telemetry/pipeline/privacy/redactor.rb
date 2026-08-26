@@ -104,8 +104,24 @@ module Wild
             end
           end
 
+          # A key-anchored pattern (built-in, e.g. ContentFilter::API_KEY_PATTERN,
+          # or a custom pattern the caller wrote the same way) declares named
+          # `prefix`/`suffix` captures so only the secret value is replaced,
+          # leaving the key name and any surrounding quotes intact: redacting
+          # `"api_key":"sk_live_..."` must yield `"api_key":"[REDACTED]"`, not
+          # a blob that swallows the key name and breaks the JSON/hash shape
+          # the adapter emitted (f-l03-2). Patterns without those captures
+          # keep the original whole-match replacement.
           def redact_pattern(content, pattern, marker)
-            content.gsub(pattern, marker)
+            if key_anchored?(pattern)
+              content.gsub(pattern) { "#{Regexp.last_match(:prefix)}#{marker}#{Regexp.last_match(:suffix)}" }
+            else
+              content.gsub(pattern, marker)
+            end
+          end
+
+          def key_anchored?(pattern)
+            pattern.is_a?(Regexp) && pattern.names.include?("prefix") && pattern.names.include?("suffix")
           end
 
           def redact_file_contents(content, marker)

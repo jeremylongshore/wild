@@ -499,6 +499,29 @@ section splits into a separate file.
   holds this logic (split out of `Redactor` to stay under
   `Metrics/ClassLength`). Advances bead "F7: Add boundary normalization
   wherever data crosses namespaces".
+- **`ContentFilter::API_KEY_PATTERN` and `AWS_SECRET_KEY_PATTERN` now match
+  JSON-quoted and hash-rocket secret shapes, not just bare `key=value`**
+  (review wave, finding f-l03-2). Both patterns required the key name
+  followed by optional whitespace then `:`/`=` directly, so a closing quote
+  between the key and the separator, the shape `JSON.generate` and Ruby
+  hash literals produce (`"api_key":"sk_live_..."`, `'api_key' => 'sk_live_...'`),
+  never matched: `ClaudeCodeAdapter#extract_tool_use_content` builds turn
+  content as `name(#{JSON.generate(input)})`, so any tool call carrying a
+  secret in its `input` put that secret into content in exactly this
+  unmatched shape, past `Export::JsonExporter` unredacted (the turn's
+  metadata copy of the same secret was already covered by f-l03-1's
+  `MetadataRedactor`, content was not). Both patterns now name a `prefix`
+  and `suffix` capture around the secret value, tolerating an optional
+  closing quote and whitespace before the separator (`:`, `=`, or `=>`) and
+  an optional opening quote after it; `Redactor#redact_pattern` replaces
+  only the captured value when those named groups are present (built-in or
+  a caller's own key-anchored custom pattern), so `"api_key":"sk_live_..."`
+  redacts to `"api_key":"[REDACTED]"` and stays parseable JSON, rather than
+  the whole `key:value` span collapsing into a bare marker. `GITHUB_TOKEN_PATTERN`,
+  `AWS_ACCESS_KEY_PATTERN`, and `BEARER_TOKEN_PATTERN` needed no change:
+  none of them anchor on a key name, so they already matched the token
+  value alone inside surrounding quotes. Advances bead "F7: Add boundary
+  normalization wherever data crosses namespaces".
 - **HIGH regression fixed: derived `Intent#description` leaked secrets past
   the redaction boundary, and `#redact_content` was not idempotent against
   its own marker** (security-review follow-up on the item above, f-l03-1).

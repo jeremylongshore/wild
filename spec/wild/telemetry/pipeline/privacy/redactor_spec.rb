@@ -332,4 +332,69 @@ RSpec.describe Wild::Telemetry::Pipeline::Privacy::Redactor do
       expect(twice).to eq(once)
     end
   end
+
+  describe "#redact_content key-anchored secret shapes (f-l03-2)" do
+    # API_KEY_PATTERN required the key name followed by optional whitespace
+    # then `:`/`=` directly, so a closing quote between the key and the
+    # separator (the shape JSON.generate and Ruby hash literals produce)
+    # never matched: the JSON-quoted case here fails on main, the bare
+    # shapes at the bottom already passed there. Table-driven so every shape
+    # the fix's docstring claims to cover is exercised, not just the one the
+    # adapter happens to emit today.
+    # Hardcoded per shape/example rather than shared through an outer local:
+    # RSpec/LeakyLocalVariable flags a value assigned outside an example and
+    # read inside one, since it can be mutated across examples that share
+    # the closure. Each string below is a literal, not a shared reference.
+    [
+      ["JSON-quoted, compact",        %("api_key":"sk_live_abcdefghijklmnop")],
+      ["JSON-quoted, spaced",         %("api_key": "sk_live_abcdefghijklmnop")],
+      ["Ruby hash rocket",            %('api_key' => 'sk_live_abcdefghijklmnop')],
+      ["bare key, colon",             "api_key: sk_live_abcdefghijklmnop"],
+      ["bare key, equals",            "api_key=sk_live_abcdefghijklmnop"],
+      ["uppercase bare key, quoted",  %(API_KEY="sk_live_abcdefghijklmnop")]
+    ].each do |label, content|
+      it "redacts the secret value for the #{label} shape" do
+        result = redactor.redact_content(content)
+
+        expect(result).not_to include("sk_live_abcdefghijklmnop")
+        expect(result).to include("[REDACTED]")
+      end
+
+      it "keeps the key name for the #{label} shape" do
+        result = redactor.redact_content(content)
+
+        expect(result).to match(/api_key/i)
+      end
+    end
+
+    it "keeps the exported JSON parseable when the secret sits in a JSON-quoted key/value pair" do
+      content = %({"api_key":"sk_live_abcdefghijklmnop","other":"value"})
+
+      result = redactor.redact_content(content)
+
+      expect { JSON.parse(result) }.not_to raise_error
+      parsed = JSON.parse(result)
+      expect(parsed["api_key"]).to eq("[REDACTED]")
+      expect(parsed["other"]).to eq("value")
+    end
+
+    it "is idempotent for the JSON-quoted shape (redacting twice equals redacting once)" do
+      content = %("api_key":"sk_live_abcdefghijklmnop")
+
+      once = redactor.redact_content(content)
+      twice = redactor.redact_content(once)
+
+      expect(twice).to eq(once)
+    end
+
+    it "redacts a JSON-quoted AWS secret_access_key the same way" do
+      aws_secret = "A" * 40
+      content = %("secret_access_key":"#{aws_secret}")
+
+      result = redactor.redact_content(content)
+
+      expect(result).not_to include(aws_secret)
+      expect(result).to eq(%("secret_access_key":"[REDACTED]"))
+    end
+  end
 end
