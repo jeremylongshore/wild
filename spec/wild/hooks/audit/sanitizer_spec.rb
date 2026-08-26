@@ -31,6 +31,18 @@ RSpec.describe Wild::Hooks::Audit::Sanitizer do
         out = sanitizer.sanitize(email: "a@b.com", phone: "555", address: "1 Main St")
         expect(out.values).to all(eq(described_class::REDACTED))
       end
+
+      it "keeps exact operational keys despite overlapping substring patterns" do
+        out = sanitizer.sanitize(
+          max_tokens: 500, token_count: 42, ip_address: "203.0.113.8",
+          email_template: "receipt", contractor_id: "contractor-7"
+        )
+
+        expect(out).to eq(
+          max_tokens: 500, token_count: 42, ip_address: "203.0.113.8",
+          email_template: "receipt", contractor_id: "contractor-7"
+        )
+      end
     end
 
     describe "hashing" do
@@ -164,5 +176,11 @@ RSpec.describe Wild::Hooks::Audit::Sanitizer do
       expect(out[:traceable_value]).to start_with(described_class::HASHED_PREFIX)
       expect(out[:user_id]).to eq(42) # default pattern no longer active
     end
+  end
+
+  it "allows hooks consumers to extend the exact-key operational allowlist" do
+    custom = described_class.new(allow_keys: %w[retry_token_count])
+
+    expect(custom.sanitize(retry_token_count: 3)[:retry_token_count]).to eq(3)
   end
 end
