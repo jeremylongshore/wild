@@ -43,6 +43,15 @@ module Wild
           job_id actor_id user_id account_id
         ].freeze
 
+        # Exact normalized keys that are operational metadata rather than
+        # secrets or stable identities. This prevents substring matching from
+        # redacting useful values such as max_tokens (token), email_template
+        # (email), and contractor_id (actor_id) while leaving similarly named
+        # sensitive fields protected.
+        DEFAULT_ALLOW_KEYS = %w[
+          max_tokens token_count ip_address email_template contractor_id
+        ].freeze
+
         # Matches a `key=value` token inside a free-form string (e.g. an
         # exception message), so #sanitize_string can redact secret-looking
         # substrings that never passed through #sanitize as a structured
@@ -55,9 +64,11 @@ module Wild
         #   any key containing one of these gets REDACTED
         # @param hash_keys [Array<String, Symbol>] substring patterns —
         #   any key containing one of these gets SHA-256 hashed
-        def initialize(redact_keys: DEFAULT_REDACT_KEYS, hash_keys: DEFAULT_HASH_KEYS)
+        def initialize(redact_keys: DEFAULT_REDACT_KEYS, hash_keys: DEFAULT_HASH_KEYS,
+                       allow_keys: DEFAULT_ALLOW_KEYS)
           @redact_keys = Set.new(redact_keys.map { |k| normalize_key(k) })
           @hash_keys   = Set.new(hash_keys.map { |k| normalize_key(k) })
+          @allow_keys  = Set.new(allow_keys.map { |k| normalize_key(k) })
         end
 
         # Sanitize a hash of parameters, returning a new hash with the
@@ -98,19 +109,27 @@ module Wild
         private
 
         def sanitize_value(key, value)
-          normalized = normalize_key(key)
-
-          if @redact_keys.any? { |rk| normalized.include?(rk) }
-            REDACTED
-          elsif @hash_keys.any? { |hk| normalized.include?(hk) }
-            hash_value(value)
-          elsif value.is_a?(Hash)
-            sanitize(value)
-          elsif value.is_a?(Array)
-            sanitize_array(value)
-          else
-            value
+          case key_action(normalize_key(key))
+          when :allow then value
+          when :redact then REDACTED
+          when :hash then hash_value(value)
+          else sanitize_nested_value(value)
           end
+        end
+
+        def key_action(normalized)
+          return :allow if @allow_keys.include?(normalized)
+          return :redact if @redact_keys.any? { |key| normalized.include?(key) }
+          return :hash if @hash_keys.any? { |key| normalized.include?(key) }
+
+          :pass
+        end
+
+        def sanitize_nested_value(value)
+          return sanitize(value) if value.is_a?(Hash)
+          return sanitize_array(value) if value.is_a?(Array)
+
+          value
         end
 
         def sanitize_array(array)

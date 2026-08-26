@@ -75,13 +75,21 @@ module Wild
           status, error = @isolator.call(&)
           return unless status == :error
 
-          @observability_failures_mutex.synchronize { @observability_failures += 1 }
+          failure_count = @observability_failures_mutex.synchronize do
+            @observability_failures += 1
+          end
+          return unless power_of_two?(failure_count)
+
           Wild::AuditFailureLog.record(
             tag: "hooks",
             error: error,
             detail: "#{sink_name} observability sink failed for hook=#{hook_name.inspect} " \
                     "handler=#{handler&.id.to_s.inspect}"
           )
+        end
+
+        def power_of_two?(number)
+          number.positive? && number.nobits?(number - 1)
         end
 
         def execute_handler(handler, context)

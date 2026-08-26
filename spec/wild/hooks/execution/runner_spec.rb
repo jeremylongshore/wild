@@ -319,6 +319,16 @@ RSpec.describe Wild::Hooks::Execution::Runner do
         expect { runner.execute("before_tool_call", {}) }
           .to output(/hook="before_tool_call".*handler="#{Regexp.escape(handler_id)}"/).to_stderr
       end
+
+      it "logs the first failure and powers of two while retaining the exact failure count" do
+        configured_logger = instance_double(Logger, error: nil)
+        allow(Wild.config).to receive(:audit_logger).and_return(configured_logger)
+
+        5.times { runner.execute("before_tool_call", {}) }
+
+        expect(configured_logger).to have_received(:error).exactly(3).times
+        expect(runner.observability_failures).to eq(5)
+      end
     end
 
     context "when a sink raises Timeout::Error (verifier follow-up 8)" do
