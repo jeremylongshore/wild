@@ -19,7 +19,14 @@ module Wild
             }
           end
 
-          def list_keys(prefix:, limit: 50)
+          # prefix defaults to "" (matching every key) rather than being
+          # required: the abstract contract is `list_keys(**_options)`
+          # (cache_adapter.rb) and the manage_cache tool schema lists prefix
+          # as optional, so CacheExecutor#list_keys calling
+          # `adapter.list_keys(**params.slice(:prefix, :limit))` with no
+          # prefix param passed an empty options hash and raised
+          # ArgumentError: missing keyword: prefix (finding f-l10-14).
+          def list_keys(prefix: "", limit: 50)
             require_rails_cache!
             store = Rails.cache
             unless store.respond_to?(:keys)

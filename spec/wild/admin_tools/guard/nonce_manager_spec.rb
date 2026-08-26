@@ -89,5 +89,46 @@ RSpec.describe Wild::AdminTools::Guard::NonceManager do
         expect(result[:valid]).to be(false)
       end
     end
+
+    context "when N threads race to confirm the same nonce concurrently (finding f-l10-1)" do
+      # Before the fix, #validate_and_consume! was check-then-act across
+      # three separate NonceStore mutex acquisitions (fetch, test
+      # entry.consumed, then consume!), so multiple threads could all
+      # observe consumed == false before any of them called consume!, and
+      # all received valid: true -- double-executing whatever
+      # mutate_destructive action the nonce was gating. This fails on main
+      # nondeterministically (run with --seed 1 and --seed 41803 both
+      # reproduce it), so it is run many times to make the flake reliable.
+      # Fires 16 threads at once (via a barrier so they truly race rather
+      # than run near-serially) and returns the array of `valid:` outcomes.
+      # Popping the results Queue 16 times blocks until all 16 threads have
+      # pushed, so no separate Thread#join bookkeeping is needed.
+      def race_confirms(nonce)
+        barrier = Queue.new
+        results = Queue.new
+        16.times do
+          Thread.new do
+            barrier.pop
+            results << validate(nonce)
+          end
+        end
+        16.times { barrier << true }
+        Array.new(16) { results.pop }
+      end
+
+      def validate(nonce)
+        manager.validate_and_consume!(nonce, action_name, params, caller_id)[:valid]
+      end
+
+      it "lets exactly one thread win, every time" do
+        50.times do
+          nonce = manager.generate(action_name, params, caller_id)
+          outcomes = race_confirms(nonce)
+          expect(outcomes.count(true)).to eq(1),
+                                          "expected exactly one winner among 16 concurrent confirms of one " \
+                                          "nonce, got #{outcomes.count(true)}"
+        end
+      end
+    end
   end
 end

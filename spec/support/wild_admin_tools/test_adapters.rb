@@ -142,7 +142,7 @@ module Wild
           @store[cache_key] || { cache_key: cache_key, exists: false, value: nil, byte_size: 0 }
         end
 
-        def list_keys(prefix:, limit: 50)
+        def list_keys(prefix: "", limit: 50)
           @calls << { method: :list_keys, args: { prefix: prefix, limit: limit } }
           @store.keys
                 .select { |k| k.start_with?(prefix) }

@@ -38,6 +38,18 @@ require "wild/admin_tools/configuration"
 require "wild/admin_tools/executor/adapters/job_adapter"
 require "wild/admin_tools/executor/adapters/cache_adapter"
 require "wild/admin_tools/executor/adapters/flag_adapter"
+# Concrete adapters (finding f-l10-2): these were previously never required,
+# so `Wild::AdminTools::Executor::Adapters::RailsCacheAdapter` etc. raised
+# NameError for any consumer following the documented
+# `config.admin_tools.cache_adapter = Rails.cache`-style wiring, and the 291
+# LOC were invisible to coverage. None of the three requires the underlying
+# gem (sidekiq/flipper) at load time -- each adapter lazily `require`s its
+# gem only inside the methods that need it and raises AdapterError on
+# LoadError, so the gem keeps loading in a host app that has neither gem
+# installed.
+require "wild/admin_tools/executor/adapters/rails_cache_adapter"
+require "wild/admin_tools/executor/adapters/sidekiq_adapter"
+require "wild/admin_tools/executor/adapters/flipper_adapter"
 require "wild/admin_tools/executor/state_capture"
 require "wild/admin_tools/executor/base"
 require "wild/admin_tools/executor/job_executor"

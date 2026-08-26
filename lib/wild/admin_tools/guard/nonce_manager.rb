@@ -47,12 +47,18 @@ module Wild
             return failure("nonce_expired")
           end
 
-          return failure("nonce_already_used") if entry.consumed
-
           internal_reason = binding_failure_reason(entry, action_name, params, caller_id)
           return failure(internal_reason) if internal_reason
 
-          @store.consume!(nonce)
+          # The "already consumed?" check and the consume itself must happen
+          # as one atomic compare-and-set (Guard::NonceStore#consume!, not
+          # #fetch then a separate #consume!) so that when N threads race to
+          # confirm the same nonce, exactly one gets `valid: true` and the
+          # rest fail here with nonce_already_used, instead of every thread
+          # that read `entry.consumed == false` before any of them called
+          # consume! all succeeding (finding f-l10-1).
+          return failure("nonce_already_used") unless @store.consume_if_unconsumed!(nonce)
+
           { valid: true }
         end
 
