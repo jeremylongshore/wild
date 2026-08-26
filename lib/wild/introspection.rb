@@ -11,9 +11,11 @@
 # Configuration note (wild-rvv.u16): this namespace keeps its rich
 # `Wild::Introspection::Configuration` policy-loader object (reads
 # access_policy.yml, resolves per-model blocked columns) and the module-level
-# `Wild::Introspection.configuration` accessor — behavior-preserving. Wiring
-# `Wild.config.introspection.access_policy_path` (the central typed struct)
-# into this loader at engine boot is a deferred Role 6/8 task.
+# `Wild::Introspection.configuration` accessor (behavior-preserving).
+# `Wild.config.introspection.access_policy_path` / `blocked_resources_path`
+# (the central typed struct) are wired into this loader by
+# #bridge_configuration!, called from Wild::Engine's config.after_initialize
+# hook at boot (f-l09-2).
 #
 # MCP transport wiring (server/, bin/wild-mcp-introspection) is Role 9 territory;
 # the server code is moved here verbatim but not yet refactored to consume the
@@ -55,7 +57,7 @@ module Wild
       # Configure the introspection policy loader. Yields the rich
       # Wild::Introspection::Configuration object and calls load! to read the
       # YAML policy files. (Distinct from the central Wild.config.introspection
-      # typed struct — see wild-rvv.u16 for the planned engine-boot wiring.)
+      # typed struct: see #bridge_configuration! for the engine-boot wiring.)
       def configure
         yield(configuration)
         configuration.load!
@@ -70,6 +72,35 @@ module Wild
       # @api private
       def reset!
         @configuration = nil
+      end
+
+      # Bridges Wild.config.introspection (the central typed struct consumers
+      # set via `Wild.configure { |c| c.introspection.access_policy_path =
+      # ... }`) into #configuration (the rich policy-loader object the
+      # introspection runtime actually queries via #model_allowed?/
+      # #resolve_model). Without this, setting the central struct had no
+      # effect: the runtime loader is a separate, never-synced singleton, and
+      # every lookup hit ModelNotAllowedError regardless of configuration
+      # (f-l09-2).
+      #
+      # No-ops when the central access_policy_path is unset (an app that
+      # never touches Wild.config.introspection is not required to configure
+      # introspection at all). Once set, copies access_policy_path and
+      # blocked_resources_path across and calls #configuration.load!, which
+      # raises Wild::Introspection::ConfigError (unchanged, pre-existing
+      # behavior) if either path is missing or unreadable: e.g. only
+      # access_policy_path was set and blocked_resources_path was not.
+      #
+      # Called once by Wild::Engine's config.after_initialize hook at boot;
+      # safe to call again (re-reads Wild.config.introspection fresh each
+      # time).
+      def bridge_configuration!
+        central = Wild.config.introspection
+        return if central.access_policy_path.nil?
+
+        configuration.access_policy_path = central.access_policy_path
+        configuration.blocked_resources_path = central.blocked_resources_path
+        configuration.load!
       end
     end
   end

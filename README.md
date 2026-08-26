@@ -88,18 +88,34 @@ Today both files are stubs that print a pending notice and `exit 1`; they are de
 
 ### Configuration
 
-One nested-accessor `Wild.config` replaces the old ten `Configuration` classes:
+One nested-accessor `Wild.config` replaces the old ten `Configuration` classes. `Wild::Engine`'s
+`config.after_initialize` hook bridges it into the two namespaces (`Wild::AdminTools`,
+`Wild::Introspection`) that still read from their own pre-consolidation configuration object at
+runtime:
 
 ```ruby
 # config/initializers/wild.rb
 Wild.configure do |config|
-  config.introspection.access_policy_path = Rails.root.join("config/wild/access_policy.yml")
-  config.admin_tools.cache_adapter        = Rails.cache    # defaulted
-  config.admin_tools.job_adapter          = ActiveJob::Base # defaulted
+  config.introspection.access_policy_path    = Rails.root.join("config/wild/access_policy.yml")
+  config.introspection.blocked_resources_path = Rails.root.join("config/wild/blocked_resources.yml")
+
+  # cache_adapter/job_adapter/flag_adapter default to :default; the engine
+  # resolves that to Rails.cache / Sidekiq / Flipper when the backend gem is
+  # loaded, or raises Wild::ConfigurationError at boot naming the setting.
+  # Only Sidekiq is a shipped job_adapter backend (no ActiveJob::Base
+  # adapter exists: ActiveJob has no generic queue-introspection API); set
+  # job_adapter/flag_adapter explicitly if you're not on Sidekiq/Flipper.
+  config.admin_tools.cache_adapter         = Rails.cache
+
   config.capability_gate.capabilities_path = Rails.root.join("config/wild/capabilities.yml")
   config.telemetry.collector.enabled       = true
 end
 ```
+
+Both `access_policy_path` and `blocked_resources_path` are required together: the introspection
+policy loader raises if only one is set. See `Wild::AdminTools.bridge_configuration!` and
+`Wild::Introspection.bridge_configuration!` (`lib/wild/admin_tools.rb`, `lib/wild/introspection.rb`)
+for the full bridging contract.
 
 ## Development
 
