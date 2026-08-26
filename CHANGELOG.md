@@ -831,6 +831,12 @@ section splits into a separate file.
 
 ### Wild::Skillops
 
+- **Made the F5 internal-by-default posture executable** (review follow-up,
+  `wild-rvv.8.1`). `Wild::Skillops.build` now raises
+  `Wild::Skillops::DisabledError` until an application explicitly sets
+  `Wild.config.skillops.enabled = true`; the default setting is no longer an
+  inert documentation claim. Skillops behavior specs opt in deliberately.
+
 - Moved 20 source files from `wild-skillops-registry/lib/wild_skillops_registry/`
   into `lib/wild/skillops/` under the `Wild::Skillops::*` namespace (Role 5
   PR-5). Layout preserved verbatim: `models/`, `registry/`, `versioning/`,

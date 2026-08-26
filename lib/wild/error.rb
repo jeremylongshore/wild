@@ -300,6 +300,10 @@ module Wild
     # Base for every Wild::Skillops failure mode.
     class Error < Wild::Error; end
 
+    # Raised when an application invokes the internal Skillops registry without
+    # explicitly opting in through `Wild.config.skillops.enabled`.
+    class DisabledError < Error; end
+
     # Raised when a skill registration payload fails validation.
     class ValidationError < Error; end
 
