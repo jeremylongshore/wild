@@ -5,6 +5,7 @@
 require "spec_helper"
 require "tmpdir"
 require "fileutils"
+require "timeout"
 
 RSpec.describe Wild::Telemetry::Collector::Store::JsonLinesStore do
   let(:tmpdir) { Dir.mktmpdir("json_lines_store_spec") }
@@ -364,6 +365,37 @@ RSpec.describe Wild::Telemetry::Collector::Store::JsonLinesStore do
         surviving_actions = store.query.map(&:action).select { |a| a.start_with?("survivor_") }
         expect(surviving_actions.uniq.size).to eq(survivor_count)
       end
+
+      # rubocop:disable RSpec/ExampleLength, Style/FileOpen -- explicit lock lifetime is the assertion.
+      it "serializes an append from another process behind the stable sidecar lock" do
+        reader, writer = IO.pipe
+        lock = File.open("#{store_path}.lock", File::RDWR | File::CREAT, 0o600)
+        lock.flock(File::LOCK_EX)
+
+        pid = fork do
+          reader.close
+          described_class.new(path: store_path).append(build_envelope(action: "child_process"))
+          writer.write("done")
+          writer.close
+        end
+        writer.close
+
+        expect(reader.wait_readable(0.1)).to be_nil
+
+        lock.flock(File::LOCK_UN)
+        lock.close
+        expect(Timeout.timeout(5) { reader.read }).to eq("done")
+        Process.wait(pid)
+        pid = nil
+
+        expect(store.query.map(&:action)).to include("child_process")
+      ensure
+        reader&.close unless reader&.closed?
+        writer&.close unless writer&.closed?
+        lock&.close unless lock&.closed?
+        Process.wait(pid) if pid && Process.waitpid(pid, Process::WNOHANG).nil?
+      end
+      # rubocop:enable RSpec/ExampleLength, Style/FileOpen
     end
   end
 end
