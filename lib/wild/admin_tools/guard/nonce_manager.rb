@@ -39,20 +39,16 @@ module Wild
         end
 
         def validate_and_consume!(nonce, action_name, params, caller_id)
-          entry = @store.fetch(nonce)
-          return failure("nonce_not_found") unless entry
-
-          if entry.expires_at < Time.now.utc
-            @store.remove(nonce)
-            return failure("nonce_expired")
+          # The store executes the expiry check, replay check, binding check,
+          # and consume under one mutex. In particular, a replay remains a
+          # replay even when its binding also differs, preserving the original
+          # audit semantics and not turning a consumed nonce into a binding
+          # oracle.
+          outcome = @store.consume_if_unconsumed!(nonce) do |entry|
+            binding_failure_reason(entry, action_name, params, caller_id)
           end
+          return failure(failure_reason_for(outcome)) unless outcome == :consumed
 
-          return failure("nonce_already_used") if entry.consumed
-
-          internal_reason = binding_failure_reason(entry, action_name, params, caller_id)
-          return failure(internal_reason) if internal_reason
-
-          @store.consume!(nonce)
           { valid: true }
         end
 
@@ -75,6 +71,14 @@ module Wild
 
         def failure(internal_reason)
           { valid: false, client_reason: CLIENT_FAILURE_REASON, internal_reason: internal_reason }
+        end
+
+        def failure_reason_for(outcome)
+          {
+            not_found: "nonce_not_found",
+            expired: "nonce_expired",
+            already_used: "nonce_already_used"
+          }.fetch(outcome, outcome.to_s)
         end
       end
     end
