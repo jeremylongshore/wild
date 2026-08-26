@@ -65,7 +65,7 @@ phase.
 | L4 integration tests | Waived for P0 | No `spec/dummy/` Rails app yet; landing in P2 (Role 8 generator + Role 9 MCP transport need a target) | End of P1: scaffold `spec/dummy/` |
 | L5 performance / chaos | Waived for v0.1.0 | DHH defer list — premature before real consumer feedback | v0.2.0 |
 | L5 accessibility | Permanently waived | Engine gem has no UI surface | n/a |
-| L6 BDD / Gherkin | Waived for v0.1.0 | DHH F10 (no BDUF docs before consumers); no `.feature` files until at least one real consumer's golden flow is captured. **Stopwatch test in `spec/stopwatch/` covers the v0.1.0 acceptance gate without Gherkin ceremony.** | v0.2.0 or earlier if a consumer surfaces a stable golden flow |
+| L6 BDD / Gherkin | Waived for v0.1.0 | DHH F10 (no BDUF docs before consumers); no `.feature` files until at least one real consumer's golden flow is captured. **A stopwatch test at `spec/stopwatch/` is planned to cover the v0.1.0 acceptance gate without Gherkin ceremony, but does not exist yet (review wave finding f-x2-4): per 002-PP-PRD FR-9, it lands at end of P2 (dry run) with the full run in P4, under Role 8/11 ownership.** | v0.2.0 or earlier if a consumer surfaces a stable golden flow |
 | L7 UAT | Waived for v0.1.0 | The five-minute stopwatch test IS the v0.1.0 acceptance gate (DHH non-negotiable); formal UAT lifecycle premature | v0.2.0 |
 
 ## Installed gates (observational — AI may update)

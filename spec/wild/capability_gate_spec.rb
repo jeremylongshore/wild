@@ -8,7 +8,24 @@ RSpec.describe Wild::CapabilityGate do
     expect(Wild::VERSION).to match(/\A\d+\.\d+\.\d+/)
   end
 
-  it "defines the Wild::CapabilityGate module" do
-    expect(described_class).to be_a(Module)
+  # Real coverage of Gate/Evaluator/Registry lives under spec/wild/capability_gate/**.
+  # This top-level spec's job (review wave finding f-x2-7: previously two vanity
+  # examples, VERSION format + "is a Module") is to smoke-test the namespace's
+  # public entry point end to end: Wild::CapabilityGate.new is documented as a
+  # Gate.new convenience constructor, and a Gate built from a config directory
+  # with no grants must fail closed, not raise, on evaluation.
+  describe ".new" do
+    it "delegates to Gate and fails closed (denies, does not raise) for an unknown caller" do
+      Dir.mktmpdir do |dir|
+        File.write(File.join(dir, "capabilities.yml"), { "capabilities" => [] }.to_yaml)
+        File.write(File.join(dir, "grants.yml"), { "grants" => [] }.to_yaml)
+
+        gate = described_class.new(config_path: dir)
+        result = gate.evaluate(caller: "service-account:unknown", capability: :basic_introspection)
+
+        expect(gate).to be_a(Wild::CapabilityGate::Gate)
+        expect(result).not_to be_allowed
+      end
+    end
   end
 end

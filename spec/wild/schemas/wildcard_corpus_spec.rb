@@ -56,6 +56,23 @@ RSpec.describe "lib/wild/schemas/wildcard_corpus.yml" do
         expect(entry.fetch("non_matches")).to be_an(Array)
       end
     end
+
+    it "has a non-empty non_matches list for every pattern except the universal '*'" do
+      # Review wave finding f-l05-3: the corpus's own header comment documents
+      # this invariant in prose ("non_matches: strings the matcher returns
+      # false for (may be empty for the universal '*')") but nothing enforced
+      # it in code. Enforced here instead of left as a comment: a future
+      # wildcard-form entry with an accidentally empty non_matches list (e.g.
+      # a copy-paste of the universal-wildcard block) now fails this spec.
+      corpus.fetch("patterns").each do |entry|
+        next if entry.fetch("pattern") == "*"
+
+        expect(entry.fetch("non_matches")).not_to be_empty,
+                                                  "pattern #{entry.fetch("pattern").inspect} must have at " \
+                                                  "least one non_matches entry (only the universal '*' " \
+                                                  "pattern may have an empty non_matches list)"
+      end
+    end
   end
 
   describe "F4 — single canonical corpus (no per-namespace fork)" do

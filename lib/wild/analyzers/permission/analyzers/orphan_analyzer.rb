@@ -36,7 +36,7 @@ module Wild
             findings = []
             grants.each do |grant|
               grant.capabilities.each do |pattern|
-                next if pattern.include?("*")
+                next if WildcardMatcher.wildcard?(pattern)
                 next if cap_names.include?(pattern)
 
                 findings << Models::Finding.new(

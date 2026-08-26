@@ -14,11 +14,34 @@ RSpec.describe Wild::Analyzers::TestFlakes::Models::TestResult do
   let(:identity) { make_identity }
 
   describe "#initialize" do
-    it "stores all attributes" do
-      expect(result.test_identity).to eq(identity)
-      expect(result.status).to eq(:passed)
-      expect(result.run_id).to eq("run-001")
-      expect(result.duration_ms).to eq(12.5)
+    # Review wave finding f-l06-3: this used to be a tautological
+    # constructor round-trip (assert the same values passed in come back
+    # out), which only fails if the class cannot be instantiated at all.
+    # Replaced with the coercion/normalization behavior #initialize
+    # actually performs, since that is the part a design change could
+    # silently break without any construction-round-trip test noticing.
+    it "coerces status to a symbol and run_id to a frozen string" do
+      r = described_class.new(
+        test_identity: identity, status: "passed", run_id: "run-001",
+        timestamp: Wild::Analyzers::TestFlakes::TestSupport::Fixtures::BASE_TIMESTAMP
+      )
+      expect(r.status).to eq(:passed)
+      expect(r.run_id).to be_frozen
+    end
+
+    it "coerces duration_ms to a Float and leaves it nil when not given" do
+      r = described_class.new(
+        test_identity: identity, status: :passed, run_id: "run-001",
+        timestamp: Wild::Analyzers::TestFlakes::TestSupport::Fixtures::BASE_TIMESTAMP, duration_ms: 12
+      )
+      expect(r.duration_ms).to eq(12.0)
+      expect(r.duration_ms).to be_a(Float)
+
+      without_duration = described_class.new(
+        test_identity: identity, status: :passed, run_id: "run-001",
+        timestamp: Wild::Analyzers::TestFlakes::TestSupport::Fixtures::BASE_TIMESTAMP
+      )
+      expect(without_duration.duration_ms).to be_nil
     end
 
     it "defaults metadata to empty hash" do

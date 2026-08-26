@@ -16,7 +16,12 @@ module Wild
       # Integration contract for Epic 10:
       #   CapabilityGate.permitted?(request_context, action:, resource:) → boolean
       #
-      # See 009-AT-ADEC-capability-gate-interface.md for the full contract.
+      # No standalone interface-contract doc exists for this integration point
+      # (review wave finding f-l09-7: the earlier "009-AT-ADEC-capability-gate-
+      # interface.md" reference was stale; the 000-docs/009 slot is occupied by
+      # 009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md instead). The
+      # contract is this module's own doc comments plus the CapabilityGate.
+      # permitted?/denial_response signatures below.
       module CapabilityGate
         REQUIRED_CAPABILITY = :basic_introspection
         CAPABILITY_DENIAL = {

@@ -7,6 +7,17 @@ module Wild
   # gem MUST be specific or re-raise after audit emission (F2 — every error
   # path emits a structured audit event).
   #
+  # RESERVED, NOT YET RAISED (as of 2026-08-25, review wave finding f-x1-2):
+  # eight subclasses below are defined and documented in the tree but no
+  # `raise` site exists for any of them anywhere in lib/ today:
+  # DeniedError, PolicyError, EvaluationError (CapabilityGate); ForbiddenError,
+  # ModelNotAllowedError (Introspection); AuthenticationError; AnalysisError;
+  # StorageError. `rescue`ing one of these today will never trigger from this
+  # gem's own code paths. This is deliberate for CapabilityGate specifically
+  # (deny-not-raise fail-closed design, F2), not yet decided for the rest. See
+  # bead "F6: Audit and either wire or delete every half-published API
+  # surface across the namespaces" (`wild-rvv.4.2`).
+  #
   # Hierarchy (matches `000-docs/003-AT-ARCH-architecture.md § Error hierarchy`
   # verbatim):
   #

@@ -2,7 +2,12 @@
 #
 # Per ADR-0003: takes Collector's heterogeneous events and emits canonical
 # events with sequence numbers (Kleppmann's most-leveraged concession,
-# F7 fix). Only downstream consumer of Collector inside the gem.
+# F7 fix). Pipeline is declared the only downstream consumer of Collector
+# inside the gem, but as of 2026-08-25 no production call site feeds
+# Collector's emitted events into Pipeline.process (review wave finding
+# f-l03-3): the dependency edge on lib/wild/telemetry/collector below is
+# allowed-but-unused today. See bead "F7: Add boundary normalization
+# wherever data crosses namespaces" (wild-rvv.5.1) for the wiring work.
 
 enforce_dependencies: true
 dependencies:

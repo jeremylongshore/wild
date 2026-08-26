@@ -10,8 +10,17 @@ RSpec.describe Wild::Analyzers::Permission do
     expect(Wild::VERSION).to match(/\A\d+\.\d+\.\d+/)
   end
 
-  it "defines the Wild::Analyzers::Permission module" do
-    expect(described_class).to be_a(Module)
+  # Real analyzer-by-analyzer coverage lives under
+  # spec/wild/analyzers/permission/**. This top-level spec's job (review
+  # wave finding f-x2-7: previously two vanity examples, VERSION format +
+  # "is a Module") is to smoke-test the namespace's public entry point,
+  # .audit, end to end.
+  describe ".audit" do
+    it "raises a configuration error rather than silently no-opping when no paths are set" do
+      allow(Wild.config.analyzers.permission).to receive_messages(capabilities_path: nil, grants_path: nil)
+
+      expect { described_class.audit }.to raise_error(Wild::ConfigurationError, /capabilities_path must be set/)
+    end
   end
 end
 
