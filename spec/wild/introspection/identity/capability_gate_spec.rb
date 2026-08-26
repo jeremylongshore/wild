@@ -9,7 +9,7 @@ RSpec.describe Wild::Introspection::Identity::CapabilityGate do
     context "with an authenticated caller" do
       let(:ctx) { authenticated_context }
 
-      it "permits all actions in v1" do
+      it "permits each action only through the configured basic_introspection grant" do
         described_class::ACTIONS.each do |action|
           expect(described_class.permitted?(ctx, action: action, resource: "Account")).to be(true)
         end
@@ -17,6 +17,19 @@ RSpec.describe Wild::Introspection::Identity::CapabilityGate do
 
       it "permits actions without a resource" do
         expect(described_class.permitted?(ctx, action: "inspect_model_schema")).to be(true)
+      end
+    end
+
+    context "when no capability policy is configured" do
+      let(:ctx) { authenticated_context }
+
+      before do
+        Wild.config.capability_gate.policy_path = nil
+        described_class.reset!
+      end
+
+      it "fails closed instead of treating authentication as authorization" do
+        expect(described_class.permitted?(ctx, action: "inspect_model_schema")).to be(false)
       end
     end
 
