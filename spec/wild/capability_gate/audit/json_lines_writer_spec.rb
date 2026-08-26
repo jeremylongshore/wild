@@ -84,6 +84,62 @@ RSpec.describe Wild::CapabilityGate::Audit::JsonLinesWriter do
     end
   end
 
+  # f-l08 addendum item 5: Audit::Event.coerce_context already bounds `context`
+  # before an Event is even built (rejects NaN/Infinity, invalid encodings,
+  # oversized payloads), so this exercises the writer's OWN defense-in-depth
+  # for the case where #to_h returns unserializable data anyway (a double, or
+  # a future field this coercion doesn't cover) — the decision must still get
+  # written, not silently dropped because JSON.generate raised.
+  describe "#write when the event hash is not JSON-serializable" do
+    let(:nan_event) do
+      instance_double(
+        Wild::CapabilityGate::Audit::Event,
+        to_h: {
+          "timestamp" => "2026-03-17T12:00:00.000Z", "decision_id" => "d1",
+          "capability" => "basic_introspection", "subject" => "svc:a",
+          "outcome" => "allow", "policy_version" => "v1", "rationale" => "granted",
+          "reason" => nil, "risk_level" => "standard",
+          "prerequisites_checked" => [], "prerequisites_passed" => true,
+          "extra" => { "session_id" => nil, "context" => { "value" => Float::NAN } }
+        }
+      )
+    end
+
+    let(:binary_event) do
+      instance_double(
+        Wild::CapabilityGate::Audit::Event,
+        to_h: {
+          "timestamp" => "2026-03-17T12:00:00.000Z", "decision_id" => "d2",
+          "capability" => "basic_introspection", "subject" => "svc:a",
+          "outcome" => "allow", "policy_version" => "v1", "rationale" => "granted",
+          "reason" => nil, "risk_level" => "standard",
+          "prerequisites_checked" => [], "prerequisites_passed" => true,
+          "extra" => { "session_id" => nil, "context" => { "value" => "\xFF\xFE".dup.force_encoding("UTF-8") } }
+        }
+      )
+    end
+
+    it "still writes exactly one audit line for a NaN context instead of dropping the line" do
+      expect(writer.write(nan_event)).to be_nil
+
+      lines = File.readlines(log_file.path)
+      expect(lines.size).to eq(1)
+      parsed = JSON.parse(lines.first)
+      expect(parsed["decision_id"]).to eq("d1")
+      expect(parsed.dig("extra", "context")).to eq({ "dropped" => true, "reason" => "context not JSON-serializable" })
+    end
+
+    it "still writes exactly one audit line for invalid-encoding binary context" do
+      expect(writer.write(binary_event)).to be_nil
+
+      lines = File.readlines(log_file.path)
+      expect(lines.size).to eq(1)
+      parsed = JSON.parse(lines.first)
+      expect(parsed["decision_id"]).to eq("d2")
+      expect(parsed.dig("extra", "context")).to eq({ "dropped" => true, "reason" => "context not JSON-serializable" })
+    end
+  end
+
   describe "creates file if it does not exist" do
     it "creates the log file on first write" do
       new_path = "#{log_file.path}.new"

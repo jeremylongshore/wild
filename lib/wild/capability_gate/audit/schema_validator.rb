@@ -30,11 +30,23 @@ module Wild
           # dev/test, off in prod (validation costs; a non-conforming event is a
           # developer bug we want surfaced in dev/test, not in production).
           # `true`/`false` force the behaviour regardless of environment.
+          #
+          # f-l08 addendum item 2: nothing sets `Wild.config.environment` from
+          # `Rails.env` (there is no such wiring in Configuration or Engine), so
+          # in a real Rails app `Wild.config.environment` silently stays at its
+          # :development default even in production — which, combined with
+          # `json_schemer` being a DEVELOPMENT-only dependency, would raise on
+          # every single evaluation in production. When Rails is loaded (this
+          # gem's Engine always `require "rails"`s it) and reports a production
+          # environment, that takes priority and forces validation off,
+          # regardless of what `Wild.config.environment` happens to hold.
+          # Anything other than a real Rails production environment falls back
+          # to the existing `Wild.config.environment` behaviour unchanged.
           def enabled?
             case Wild.config.capability_gate.validate_audit_events
             when true then true
             when false then false
-            else %i[development test].include?(Wild.config.environment)
+            else auto_enabled?
             end
           end
 
@@ -55,6 +67,19 @@ module Wild
           end
           # rubocop:enable Rails/Delegate
 
+          # Probe that the validator is actually usable (compiles/memoizes the
+          # schema) WITHOUT validating any particular event. Raises
+          # AuditValidatorUnavailableError if `json_schemer` is absent — the
+          # same failure `schemer` raises on first real use, just triggered at
+          # Gate#initialize (construction time) instead of first #evaluate
+          # (f-l08-2 boot-time hardening, item 2b). The first-use raise inside
+          # `schemer` stays in place as a backstop for any caller that builds an
+          # Evaluator directly, bypassing Gate#initialize.
+          def ensure_available!
+            schemer
+            nil
+          end
+
           # Reset the memoized schemer (test support — after a schema edit).
           def reset!
             @schemer = nil
@@ -62,13 +87,31 @@ module Wild
 
           private
 
+          # (production => off); anything else falls back to the pre-existing
+          # Wild.config.environment check. Rescue defensively — a stubbed or
+          # unusual Rails.env must never turn "should validate" into a raise
+          # from inside this predicate itself.
+          # @api private
+          def auto_enabled?
+            return false if rails_production?
+
+            %i[development test].include?(Wild.config.environment)
+          end
+
+          # @api private
+          def rails_production?
+            defined?(Rails) && Rails.respond_to?(:env) && Rails.env.production?
+          rescue StandardError
+            false
+          end
+
           # Compiled schema, memoized — compilation is the expensive step.
           def schemer
             @schemer ||= begin
               require "json_schemer"
               JSONSchemer.schema(YAML.safe_load_file(SCHEMA_PATH, permitted_classes: []))
             rescue LoadError
-              raise Wild::ConfigurationError,
+              raise Wild::CapabilityGate::AuditValidatorUnavailableError,
                     "audit-event validation is enabled but the `json_schemer` gem is not available. " \
                     "Add `gem \"json_schemer\"` to your bundle, or disable validation via " \
                     "`Wild.config.capability_gate.validate_audit_events = false`."

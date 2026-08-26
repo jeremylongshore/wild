@@ -55,10 +55,15 @@ module Wild
     class PolicyError < Error; end
 
     # F2 mandate: marks the "gate machinery itself broke" failure mode. The
-    # shipped contract is fail-closed-DENY, not raise: when a `rescue` path in
-    # `Evaluator#evaluate` catches a raise, it emits a structured audit event
-    # with `result: "evaluation_error"` and returns a denial — it never raises
-    # out of `evaluate`. Never silent: always paired with an audit event,
+    # shipped contract is fail-closed-DENY for genuine runtime/policy
+    # failures: when `Evaluator#evaluate`'s `StandardError` rescue catches a
+    # raise, it emits a structured audit event with `result:
+    # "evaluation_error"` and returns a denial. The one deliberate exception
+    # is a DEVELOPER_ERRORS member (AuditSchemaError and its subclass
+    # AuditValidatorUnavailableError): those re-raise out of `evaluate`
+    # instead of being demoted to a denial (f-l08-2/f-l08-3) — a developer bug
+    # must surface loudly, not degrade the audit trail. Never silent: every
+    # non-DEVELOPER_ERRORS failure is always paired with an audit event,
     # emitted BEFORE the denial is returned (see audit_liveness_spec ordering
     # examples, wild-rvv.4.1.1).
     #
@@ -76,6 +81,20 @@ module Wild
     # (validation off) never raises this — the never-raises guarantee is a
     # production guarantee.
     class AuditSchemaError < Error; end
+
+    # Raised specifically when audit-event validation is enabled but the
+    # `json_schemer` development gem is not on the bundle (f-l08-2). Subclasses
+    # AuditSchemaError, NOT Wild::ConfigurationError, so a single
+    # `DEVELOPER_ERRORS = [AuditSchemaError]` whitelist at this namespace's
+    # rescue sites (evaluator.rb, gate.rb) re-raises every developer-bug signal
+    # from CapabilityGate with one class check, without also having to
+    # whitelist the gem-wide Wild::ConfigurationError — which would let an
+    # unrelated ConfigurationError from a future prerequisite checker escape
+    # Evaluator#evaluate before its emit_audit call runs (f-l08 addendum item
+    # 12). The message stays worded like a configuration problem even though
+    # the class is not; deliberately not multiply-inherited from both
+    # AuditSchemaError and ConfigurationError.
+    class AuditValidatorUnavailableError < AuditSchemaError; end
   end
 
   module Introspection

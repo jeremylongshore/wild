@@ -93,6 +93,48 @@ RSpec.describe Wild::AdminTools::Identity::GateClient do
       end
     end
 
+    # f-l08-3 (item 3): a CapabilityGate developer-bug signal must not be
+    # demoted to an ordinary GateError — AuthenticatedPipeline only rescues
+    # GateError, so wrapping this would let it get silently absorbed into a
+    # generic "gate_denied" downstream with the real cause discarded.
+    context "when gate raises a developer-bug error (AuditSchemaError)" do
+      let(:broken_gate) do
+        Object.new.tap do |g|
+          def g.evaluate(**_args)
+            raise Wild::CapabilityGate::AuditSchemaError, "audit event does not conform to audit_event.yml"
+          end
+        end
+      end
+      let(:client) { described_class.new(gate: broken_gate) }
+
+      it "re-raises the AuditSchemaError instead of wrapping it in GateError" do
+        expect do
+          client.authorize(session, "inspect_job")
+        end.to raise_error(Wild::CapabilityGate::AuditSchemaError, /does not conform/)
+      end
+
+      it "logs the developer error via Wild.config.audit_logger before re-raising" do
+        logger = instance_spy(Logger)
+        Wild.configure { |c| c.audit_logger = logger }
+
+        begin
+          client.authorize(session, "inspect_job")
+        rescue Wild::CapabilityGate::AuditSchemaError
+          nil
+        end
+
+        expect(logger).to have_received(:error).with(/AuditSchemaError/)
+      end
+
+      it "falls back to $stderr when no audit_logger is configured" do
+        expect do
+          client.authorize(session, "inspect_job")
+        rescue Wild::CapabilityGate::AuditSchemaError
+          nil
+        end.to output(/capability gate raised a developer error: Wild::CapabilityGate::AuditSchemaError/).to_stderr
+      end
+    end
+
     it "passes correct capability name to gate" do
       client.authorize(session, "retry_job")
       call = test_gate.calls.last

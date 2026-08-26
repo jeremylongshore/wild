@@ -125,6 +125,102 @@ section splits into a separate file.
 
 ### Wild::CapabilityGate
 
+- **Review wave: closed four audit-blind paths in the capability gate**
+  (findings f-l08-1, f-l08-2, f-l08-3, f-l08-4). Advances bead "Move
+  wild-capability-gate into Wild::CapabilityGate and fix the F2 audit-blind
+  path"; does not close it (the fail-closed posture for a dark writer+logger
+  on an ALLOW result is a separate, deliberately deferred decision, tracked by
+  bead "Decide the fail-closed posture for ALLOW results when both the audit
+  writer and logger are dark").
+  - **f-l08-1**: a hostile (non-Hash) `context` argument to `Gate#evaluate` /
+    `Evaluator#evaluate` used to raise `TypeError` inside `Audit::Event#initialize`,
+    get swallowed by `emit_audit`'s rescue, and leave the evaluation's ALLOW/DENY
+    with zero audit lines. New `SafeCoercion#safe_context` coerces defensively
+    (never raises) before event construction, so one bad argument can no longer
+    suppress the audit record for its own decision.
+  - **f-l08-2**: `Audit::SchemaValidator` already raised `Wild::ConfigurationError`
+    when validation was enabled but `json_schemer` (a dev-only dependency) was
+    absent, but `emit_audit`'s blanket `StandardError` rescue caught it anyway,
+    and with `audit_logger` nil by default the whole thing vanished: every
+    evaluation returned ALLOW with zero audit and zero log. `ConfigurationError`
+    is now re-raised alongside `AuditSchemaError`, ordered before the
+    `StandardError` rescue in both `Evaluator#evaluate` and `Gate#evaluate`, so
+    a missing dev dependency fails loudly at first use instead of degrading the
+    gate's audit trail. The `:auto` validation toggle's dev/test-on,
+    production-off semantics are unchanged.
+  - **f-l08-3**: `Gate#evaluate`'s blanket `StandardError` rescue was silently
+    swallowing the `AuditSchemaError` that `Evaluator#evaluate` deliberately
+    re-raises to surface a non-conforming audit event as a developer bug,
+    demoting it to an audit-blind `:evaluation_error` denial. `gate.rb`'s
+    comment, and a `gate_spec.rb` example, both asserted this rescue was
+    unreachable today (false: the re-raise already existed). Added an
+    explicit `rescue AuditSchemaError, ConfigurationError; raise` above the
+    blanket rescue, corrected both the comment and the spec's claim, and added
+    a Gate-level example proving the raise now reaches the caller.
+  - **f-l08-4**: `log_audit_failure` logged to `Wild.config.audit_logger.error`
+    only when a logger was explicitly configured; the default `nil` logger made
+    every audit-writer failure terminally silent while the gate still returned
+    ALLOW/DENY. It now falls back to `Kernel#warn` ($stderr) whenever no usable
+    logger is configured (or the configured one itself raises), so a writer
+    failure is observable out of the box, not only when a caller opts in.
+- **Review-wave verifier follow-ups on the f-l08-1..4 fix (findings f-l08-1,
+  f-l08-2, f-l08-3, f-l08-4, PR #74 verifier pass).** Advances the same bead
+  ("Move wild-capability-gate into Wild::CapabilityGate and fix the F2
+  audit-blind path").
+  - **f-l08-4 correction**: `Kernel#warn` is a no-op when `$VERBOSE` is nil
+    (`ruby -W0`, a caller wrapped in `silence_warnings`) — the prior fix's own
+    specs only passed because `spec_helper.rb` sets `config.warnings = false`,
+    which affects RSpec's own noise, not `$VERBOSE`. `log_audit_failure` now
+    writes directly to `$stderr`, so the fallback is unconditional; only an
+    unwritable `$stderr` defeats it (the CHANGELOG entry above is now true as
+    written, not just under the process's default warning verbosity).
+  - **f-l08-2 in production**: `SchemaValidator.enabled?`'s `:auto` branch now
+    consults `Rails.env` (forcing validation off in a real Rails production
+    environment) before falling back to `Wild.config.environment`, closing the
+    gap where nothing wires `Wild.config.environment` from `Rails.env` and a
+    production app without the dev-only `json_schemer` gem would otherwise
+    raise on every evaluation. `Gate#initialize` also probes the validator at
+    construction time (when `audit_log_path` is given), so the failure surfaces
+    at boot instead of first `#evaluate`; the first-use raise inside
+    `SchemaValidator#schemer` remains as a backstop.
+  - **f-l08-3 in admin_tools**: `GateClient#authorize` used to rescue every
+    `StandardError` (including the deliberately re-raised
+    `AuditSchemaError`/`ConfigurationError`) into a `GateError`, and
+    `AuthenticatedPipeline` only rescues `GateError`, so a developer-bug signal
+    from the gate was indistinguishable from an ordinary denial and its message
+    was discarded. `GateClient` now re-raises `CapabilityGate::DEVELOPER_ERRORS`
+    members unwrapped (logging the class + message first), so they propagate
+    through `AuthenticatedPipeline` instead of becoming a silent `gate_denied`.
+  - **f-l08-1 context handling moved and hardened**: context coercion moved
+    from `Evaluator`'s `SafeCoercion` into `Audit::Event.coerce_context` (both
+    a public class method `Evaluator#evaluate` calls once, up front — so the
+    SAME coerced context reaches prerequisite checkers and the audit trail,
+    instead of the checker seeing the raw hostile value while the trail
+    recorded a separately-coerced one — and a private instance-level backstop
+    for any other `Event.new` caller). It now `dup`s a Hash argument before
+    freezing (previously `Hash(context)` returned the CALLER's own Hash for a
+    real Hash argument, and freezing it was a `FrozenError` trap for any
+    consumer who reused that Hash); dispatches the non-Hash placeholder by
+    class instead of a blanket `#inspect` (a multi-megabyte String or a very
+    deeply nested Array made `#inspect` slow or fatal — a deep Array's
+    recursive `#inspect` raises `SystemStackError`, which is not a
+    `StandardError` and would have escaped every rescue with zero audit lines
+    written); routes the placeholder through `Wild::Hooks::Audit::Sanitizer`
+    so a hostile `context: "token=sk-..."` is redacted, not written verbatim;
+    and bounds a Hash context that coerces cleanly but is not JSON-safe (NaN,
+    invalid encodings, self-reference) or exceeds the `audit_event.yml extra`
+    budget (2 KiB), replacing it with a `{ truncated:, keys: }` summary.
+    `JsonLinesWriter#write` also gained its own defense-in-depth rescue for
+    unserializable event hashes, writing a bounded stand-in line instead of
+    dropping the audit record. Corrects a wrong comment claiming a
+    pairs-shaped Array converts via `Hash()` — verified false, every non-empty
+    Array raises `TypeError` there regardless of shape.
+  - Introduced `Wild::CapabilityGate::DEVELOPER_ERRORS = [AuditSchemaError]`
+    and `Wild::CapabilityGate::AuditValidatorUnavailableError <
+    AuditSchemaError` (replacing the gem-wide `Wild::ConfigurationError` at the
+    json_schemer-absent raise site) so every developer-bug re-raise in this
+    namespace is one class check, without also giving a free pass to an
+    unrelated `ConfigurationError` a future prerequisite checker might raise.
 - **F2 fast-follow: Gate-rescue contract pinned + log-failure hardened**
   (Role 6 PR-8, `wild-wxk`; Armstrong F2 sign-off findings 2 + 4 — **closes the
   F2 epic `wild-rvv.4.1`**).
@@ -252,8 +348,15 @@ section splits into a separate file.
   - **Audit-pipeline failure is no longer doubly silent.** `Evaluator#emit_audit`
     previously swallowed write failures to `nil`. It now logs them to
     `Wild.config.audit_logger.error` (still never raises — a broken audit log
-    must not break the gate). Only a simultaneous writer-AND-logger outage is
-    terminally silent.
+    must not break the gate). **Correction (review wave, finding f-l08-4):**
+    this guarantee originally only held when a caller had explicitly
+    configured `audit_logger`: it defaults to `nil` (`configuration.rb`), so
+    a single writer failure under default configuration was terminally
+    silent, not merely "a simultaneous writer-AND-logger outage" as stated
+    here previously. `log_audit_failure` now falls back to `Kernel#warn`
+    ($stderr) whenever no usable logger is configured (or the configured one
+    itself raises), so a writer failure is never silent out of the box; only
+    an unwritable `$stderr` defeats it.
   - `Audit::Event` gains a third result value, `evaluation_error` (distinct
     from `denied`), so audit readers can tell "policy said no" apart from "the
     gate broke and failed closed". `:evaluation_error` is always a denial
