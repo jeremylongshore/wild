@@ -10,11 +10,11 @@
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
 
 > **Status: 0.0.1 pre-release (not on RubyGems; no tags).** The consolidation build paused
-> 2026-06-02 mid-phase P1 and a strategic review wave opened 2026-08-25
+> 2026-06-02 mid-phase P1 and a strategic review wave completed 2026-08-26
 > (`000-docs/009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md`).
 >
 > **Works today:** the library (`require "wild"`, all ten `Wild::*` namespaces), `Wild.configure`,
-> the per-namespace rake test tasks, the full RSpec suite (3083+ examples) and RuboCop in CI.
+> the per-namespace rake test tasks, the full RSpec suite (3,325 examples at review-wave closeout) and RuboCop.
 >
 > **Not yet:** `rails g wild:install` (stub), the two MCP server binaries (stubs that exit 1;
 > not declared as gem executables), `prompts/` (does not exist), the five-minute stopwatch test,
@@ -117,9 +117,9 @@ policy loader raises if only one is set. See `Wild::AdminTools.bridge_configurat
 `Wild::Introspection.bridge_configuration!` (`lib/wild/admin_tools.rb`, `lib/wild/introspection.rb`)
 for the full bridging contract.
 
-`Wild.config.capability_gate.capabilities_path` exists for a future integration,
-but the capability gate does not read it today; `Wild::CapabilityGate::Gate`
-takes `config_path:` directly. The analyzer setting above is the one
+`Wild.config.capability_gate.policy_path` configures the introspection capability
+gate; when absent, introspection fails closed. `Wild::CapabilityGate::Gate`
+still takes `config_path:` directly. The analyzer setting above is the one
 `Wild::Analyzers::Permission.audit` actually reads.
 
 ## Development

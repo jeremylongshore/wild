@@ -5,12 +5,13 @@
 > (`NNN-CC-ABCD-description.md`, flat, chronological). Architecture decisions live in
 > `adr/` and are numbered separately.
 
-*Last updated: 2026-08-25 (review-wave interlude: 009 plan + 010/010a review record filed; 011 reserved).*
+*Last updated: 2026-08-26 (review-wave closeout: 009 plan, FINAL 010/010a review record, and 011 AAR filed).*
 
 ## Numbered documents
 
 | # | Doc | Type | Purpose |
 |---|---|---|---|
+| index | [000-INDEX.md](000-INDEX.md) | index | This site-map and document-routing guide |
 | 000 | [000-AA-TMPL-after-action-report.md](000-AA-TMPL-after-action-report.md) | template | Canonical 9-section AAR skeleton (byte-identical copy of intent-os `000-AA-TMPL`; drift-checked by shasum) |
 | 001 | [001-PP-BCASE-business-case.md](001-PP-BCASE-business-case.md) | plan | Why consolidate; what consolidation buys |
 | 002 | [002-PP-PRD-product-requirements.md](002-PP-PRD-product-requirements.md) | plan | Requirements + the five-minute stopwatch test |
@@ -21,8 +22,8 @@
 | 007 | [007-AT-STND-codeql-strategy.md](007-AT-STND-codeql-strategy.md) | standard | CodeQL `security-extended` strategy (ruby + actions) |
 | 008 | [008-AT-AUDT-pre-move-coupling-survey.md](008-AT-AUDT-pre-move-coupling-survey.md) | audit | Static cross-namespace coupling survey of the 10 old gems against ADR-0003 |
 | 009 | [009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md](009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md) | plan | Plan of record for the review-wave interlude between Role 6 and Role 7 |
-| 010 | [010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md](010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md) + [010a data.json](010a-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25-data.json) | review | Review-wave record (DRAFT until Stage 4): 89 raw → 18 confirmed P0/P1, 12-lane namespace health, 36-bead docket, council-fix ledger delta, 12 fix clusters |
-| 011 | `011-AA-AACR-strategic-review-and-fix-wave-<date>.md` | AAR | (reserved) After-action report for the review wave |
+| 010 | [010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md](010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md) + [010a data.json](010a-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25-data.json) | review | FINAL review-wave record: 89 raw → 18 confirmed P0/P1, 12-lane namespace health, 36-bead docket, council-fix ledger delta, 12 fix clusters |
+| 011 | [011-AA-AACR-strategic-review-and-fix-wave-2026-08-26.md](011-AA-AACR-strategic-review-and-fix-wave-2026-08-26.md) | AAR | After-action report and deferred-showcase decision for the completed review wave |
 
 ## Architecture decision records (`adr/`)
 

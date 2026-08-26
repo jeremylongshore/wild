@@ -15,7 +15,7 @@
 - **Epic:** "Run a strategic review and fix wave on the wild engine gem before resuming the build" (top-level, not under the consolidation epic it audits)
 - **GitHub:** issue on `jeremylongshore/wild` (linked from the epic bead notes)
 - **Author:** Jeremy Longshore
-- **Status:** ACTIVE (2026-08-25)
+- **Status:** COMPLETE (2026-08-26). Review record: [010-RA-REVW](010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md); closeout: [011-AA-AACR](011-AA-AACR-strategic-review-and-fix-wave-2026-08-26.md).
 - **Pattern sources:** intent-os `039-DR-STND` (epic documentation + AAR), `064-DR-STND §5`, `000-AA-TMPL`; intent-eval-lab `051-AA-AACR` + `051a` data.json (review-wave prototype), trimmed to gem scale.
 
 ## 1. Where the build stopped (verified 2026-08-25, not from stale docs)
