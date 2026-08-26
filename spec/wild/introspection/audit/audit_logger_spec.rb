@@ -67,8 +67,9 @@ RSpec.describe Wild::Introspection::Audit::AuditLogger do
       Wild::Introspection.configuration.audit_log_path = nil
     end
 
-    it "silently skips logging" do
-      expect { described_class.log(record) }.not_to raise_error
+    it "does not silently skip logging" do
+      expect { described_class.log(record) }
+        .to output(/audit record not persisted: audit_log_path is not configured/).to_stderr
       expect(File.exist?(log_path)).to be false
     end
   end

@@ -98,6 +98,7 @@ module Wild
 
     CapabilityGate = Struct.new(
       :capabilities_path,
+      :policy_path,
       :on_evaluation_error,
       :validate_audit_events,
       keyword_init: true
@@ -105,6 +106,10 @@ module Wild
       def initialize(**kwargs)
         super(
           capabilities_path: kwargs.fetch(:capabilities_path, nil),
+          # Directory containing capabilities.yml and grants.yml. Consumers
+          # that route a privileged namespace through CapabilityGate must set
+          # this explicitly; an unset policy is fail-closed, never allow-all.
+          policy_path: kwargs.fetch(:policy_path, nil),
           # CURRENTLY INERT (Armstrong F2 gate, wild-28y): Evaluator#evaluate
           # unconditionally fails closed (deny + audit, never raises) and does
           # NOT read this knob. The :hard_fail default documents intent but does
