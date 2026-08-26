@@ -25,7 +25,9 @@ module Wild
           def append(envelope)
             line = JSON.generate(envelope.to_h)
             @mutex.synchronize do
-              File.open(@path, "a") { |f| f.puts(line) }
+              with_file_lock do
+                File.open(@path, "a") { |f| f.puts(line) }
+              end
             end
             envelope
           rescue SystemCallError, IOError => e
@@ -79,7 +81,9 @@ module Wild
 
           def clear!
             @mutex.synchronize do
-              atomic_replace("") if File.exist?(@path)
+              with_file_lock do
+                atomic_replace("") if File.exist?(@path)
+              end
             end
           rescue SystemCallError, IOError => e
             raise StorageError, "clear failed: #{e.class}: #{e.message}"
@@ -109,24 +113,25 @@ module Wild
           # `File.open(tmp, "wb")` picks up umask-default permissions and the
           # calling uid instead).
           #
-          # The lock this rewrite runs under (@mutex, shared with #append) is
-          # process-local: it does nothing for two separate processes (or
-          # two separate JsonLinesStore instances) writing the same file
-          # concurrently, there is no flock, and none is added here.
-          # Cross-process purge/append safety on a shared file is a
-          # follow-up (bead: "Add cross-process file locking to
-          # JsonLinesStore for multi-process purge/append safety").
+          # The process-local mutex is paired with an advisory flock on a
+          # stable sidecar file. Locking @path itself would be incorrect:
+          # atomic_replace renames a new inode over @path, so another process
+          # could retain a lock on the old inode and append to the new one.
+          # The sidecar lock serializes append, compact, and clear! across
+          # distinct store instances and Ruby processes.
           def compact
             @mutex.synchronize do
-              return 0 unless File.exist?(@path)
+              with_file_lock do
+                return 0 unless File.exist?(@path)
 
-              lines = File.readlines(@path)
-              kept_lines = yield(lines)
-              removed_count = lines.length - kept_lines.length
-              return 0 if removed_count.zero?
+                lines = File.readlines(@path)
+                kept_lines = yield(lines)
+                removed_count = lines.length - kept_lines.length
+                return 0 if removed_count.zero?
 
-              atomic_replace(kept_lines.join)
-              removed_count
+                atomic_replace(kept_lines.join)
+                removed_count
+              end
             end
           rescue SystemCallError, IOError => e
             raise StorageError, "compact failed: #{e.class}: #{e.message}"
@@ -136,6 +141,19 @@ module Wild
 
           def ensure_directory!
             FileUtils.mkdir_p(File.dirname(@path))
+          end
+
+          def with_file_lock
+            File.open("#{@path}.lock", File::RDWR | File::CREAT, 0o600) do |lock|
+              lock.flock(File::LOCK_EX)
+              yield
+            ensure
+              begin
+                lock.flock(File::LOCK_UN)
+              rescue StandardError
+                nil
+              end
+            end
           end
 
           def atomic_replace(content)
