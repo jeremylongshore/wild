@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# The repository hook is versioned under scripts/; this dispatcher remains in
+# the active shared hooks path selected by `bd hooks install --shared`.
+exec "$(git rev-parse --show-toplevel)/scripts/git-hooks/commit-msg" "$@"

@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+if command -v bd >/dev/null 2>&1; then
+  bd hooks run post-merge "$@"
+  hook_status=$?
+  if [ "$hook_status" -ne 0 ] && [ "$hook_status" -ne 3 ]; then
+    exit "$hook_status"
+  fi
+fi

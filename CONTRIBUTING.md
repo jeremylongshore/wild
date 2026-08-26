@@ -22,8 +22,8 @@ cd wild
 # Install dependencies
 bin/setup
 
-# Wire local git hooks (one-time per clone — pre-commit RuboCop, commit-msg
-# conventional-commits, pre-push RSpec smoke)
+# Wire shared Beads and repository hooks (one-time per clone — pre-commit
+# RuboCop, commit-msg conventional-commits, pre-push RSpec smoke)
 scripts/install-hooks
 
 # Run the test suite
@@ -46,7 +46,9 @@ bundle exec bundler-audit check --update
 
 ### Local git hooks
 
-`scripts/install-hooks` symlinks three plain-shell hooks into `.git/hooks/`:
+`scripts/install-hooks` activates the committed `.beads-hooks/` chain with
+`bd hooks install --shared --chain`. It keeps Beads lifecycle hooks and the
+repository's conventional-commit, RuboCop, and RSpec checks active together.
 
 | Hook | What it does | Bypass |
 |---|---|---|

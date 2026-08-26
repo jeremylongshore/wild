@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# Versioned Beads + repository hook chain. `bd hooks install --shared --chain`
+# refreshes the managed Beads section while preserving this command.
+if command -v bd >/dev/null 2>&1; then
+  bd hooks run pre-commit "$@"
+  hook_status=$?
+  if [ "$hook_status" -ne 0 ] && [ "$hook_status" -ne 3 ]; then
+    exit "$hook_status"
+  fi
+fi
+exec "$(git rev-parse --show-toplevel)/scripts/git-hooks/pre-commit" "$@"
