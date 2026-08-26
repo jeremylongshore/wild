@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-hooks — symlink scripts/git-hooks/* into .git/hooks/
+# install-hooks — activate the shared Beads + repository hook chain.
 #
 # Run once per clone. Idempotent — safe to re-run.
 # To skip a hook: `git commit --no-verify` / `git push --no-verify`.
@@ -8,8 +8,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HOOKS_SRC="$REPO_ROOT/scripts/git-hooks"
-HOOKS_DST="$REPO_ROOT/.git/hooks"
+HOOKS_DST="$REPO_ROOT/.beads-hooks"
 
 if [ ! -d "$REPO_ROOT/.git" ]; then
   echo "install-hooks: no .git/ at $REPO_ROOT — not a git checkout?" >&2
@@ -17,42 +16,26 @@ if [ ! -d "$REPO_ROOT/.git" ]; then
 fi
 
 if [ "${1:-}" = "--uninstall" ]; then
-  for hook in pre-commit commit-msg pre-push; do
-    target="$HOOKS_DST/$hook"
-    if [ -L "$target" ] && [ "$(readlink "$target")" = "$HOOKS_SRC/$hook" ]; then
-      rm "$target"
-      echo "removed: $target"
-    fi
-  done
+  git config --unset core.hooksPath 2>/dev/null || true
+  echo "removed: core.hooksPath"
   exit 0
 fi
 
-mkdir -p "$HOOKS_DST"
+if ! command -v bd >/dev/null 2>&1; then
+  echo "install-hooks: bd is required to install the shared Beads hook chain." >&2
+  exit 2
+fi
+
+# `--shared` selects the committed .beads-hooks/ path. `--chain` refreshes the
+# managed Beads sections while preserving the repository dispatchers outside
+# those markers (including commit-msg, which Beads does not manage itself).
+bd hooks install --shared --chain
 
 for hook in pre-commit commit-msg pre-push; do
-  src="$HOOKS_SRC/$hook"
-  dst="$HOOKS_DST/$hook"
-
-  if [ ! -x "$src" ]; then
-    chmod +x "$src"
+  if [ ! -x "$HOOKS_DST/$hook" ]; then
+    chmod +x "$HOOKS_DST/$hook"
   fi
-
-  # If destination is already our symlink, skip
-  if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
-    echo "ok:      $hook (already linked)"
-    continue
-  fi
-
-  # If destination exists and isn't our symlink, back it up
-  if [ -e "$dst" ] && [ ! -L "$dst" ]; then
-    backup="$dst.local.$(date +%s)"
-    mv "$dst" "$backup"
-    echo "backup:  $dst -> $backup"
-  fi
-
-  ln -sf "$src" "$dst"
-  echo "linked:  $hook"
 done
 
 echo
-echo "All hooks installed. To bypass a single commit: git commit --no-verify"
+echo "Shared Beads and repository hooks installed. To bypass a single commit: git commit --no-verify"
