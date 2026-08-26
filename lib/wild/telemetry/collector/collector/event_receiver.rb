@@ -29,14 +29,15 @@ module Wild
           # error and does not inflate the storage-failure counter, so an
           # operator alerting on that counter is alerting on genuine
           # disk/IO problems, not on arbitrary store bugs.
-          attr_reader :storage_failure_count
+          attr_reader :storage_monitor
 
-          def initialize(store:, validator: nil, filter: nil)
+          delegate :storage_failure_count, to: :storage_monitor
+
+          def initialize(store:, validator: nil, filter: nil, storage_monitor: nil)
             @store = store
             @validator = validator || Schema::Validator.new
             @filter = filter || Privacy::Filter.new
-            @storage_failure_count = 0
-            @counter_mutex = Mutex.new
+            @storage_monitor = storage_monitor || Store::StorageMonitor.new(store: store)
           end
 
           def receive(event)
@@ -64,7 +65,7 @@ module Wild
           end
 
           def record_storage_failure(error)
-            @counter_mutex.synchronize { @storage_failure_count += 1 }
+            @storage_monitor.record_storage_failure(error)
             log_storage_failure(error)
           end
 

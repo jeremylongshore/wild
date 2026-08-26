@@ -7,6 +7,8 @@ module Wild
         class StorageMonitor
           def initialize(store:)
             @store = store
+            @storage_failure_count = 0
+            @failure_mutex = Mutex.new
           end
 
           def stats
@@ -15,14 +17,27 @@ module Wild
               size_bytes: size_bytes,
               oldest_event: oldest_event_timestamp,
               newest_event: newest_event_timestamp,
+              storage_failure_count: storage_failure_count,
               store_type: @store.class.name
             }
           end
 
           def healthy?
-            @store.count >= 0
+            @store.count >= 0 && storage_failure_count.zero?
           rescue StandardError
             false
+          end
+
+          # Records a storage-layer failure reported by EventReceiver. This
+          # is deliberately distinct from arbitrary adapter bugs so the health
+          # signal means the configured telemetry store is failing, not merely
+          # that application code raised while attempting an append.
+          def record_storage_failure(_error = nil)
+            @failure_mutex.synchronize { @storage_failure_count += 1 }
+          end
+
+          def storage_failure_count
+            @failure_mutex.synchronize { @storage_failure_count }
           end
 
           private
