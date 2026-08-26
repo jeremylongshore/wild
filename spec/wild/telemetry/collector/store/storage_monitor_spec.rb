@@ -51,6 +51,10 @@ RSpec.describe Wild::Telemetry::Collector::Store::StorageMonitor do
       it "returns nil for newest_event" do
         expect(monitor.stats[:newest_event]).to be_nil
       end
+
+      it "returns zero storage failures" do
+        expect(monitor.stats[:storage_failure_count]).to eq(0)
+      end
     end
 
     context "with a JsonLinesStore containing events" do
@@ -116,6 +120,27 @@ RSpec.describe Wild::Telemetry::Collector::Store::StorageMonitor do
 
       it "returns false" do
         expect(monitor.healthy?).to be(false)
+      end
+    end
+
+    context "when an EventReceiver reports a storage failure" do
+      let(:failing_store) do
+        store = Wild::Telemetry::Collector::Store::MemoryStore.new
+        allow(store).to receive(:append).and_raise(Wild::Telemetry::Collector::StorageError, "disk full")
+        store
+      end
+      let(:monitor) { described_class.new(store: failing_store) }
+      let(:receiver) do
+        Wild::Telemetry::Collector::Collector::EventReceiver.new(
+          store: failing_store, storage_monitor: monitor
+        )
+      end
+
+      it "surfaces the drop count and fails the health check" do
+        receiver.receive(valid_action_completed_event)
+
+        expect(monitor.stats[:storage_failure_count]).to eq(1)
+        expect(monitor).not_to be_healthy
       end
     end
   end

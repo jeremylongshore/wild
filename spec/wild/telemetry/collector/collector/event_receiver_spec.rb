@@ -95,6 +95,7 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
       store = instance_double(Wild::Telemetry::Collector::Store::MemoryStore)
       allow(store).to receive(:append)
         .and_raise(Wild::Telemetry::Collector::StorageError, "append failed: Errno::ENOSPC: disk full")
+      allow(store).to receive_messages(count: 0, recent: [])
       store
     end
 
@@ -110,6 +111,13 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
     it "counts the storage failure distinctly from a validation reject (finding f-l02-3)" do
       expect { receiver.receive(valid_action_completed_event) }
         .to change(receiver, :storage_failure_count).from(0).to(1)
+    end
+
+    it "exposes the failure through its StorageMonitor health surface" do
+      receiver.receive(valid_action_completed_event)
+
+      expect(receiver.storage_monitor.stats[:storage_failure_count]).to eq(1)
+      expect(receiver.storage_monitor).not_to be_healthy
     end
 
     it "does not count a validation reject as a storage failure" do
@@ -146,6 +154,7 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
     let(:buggy_store) do
       store = instance_double(Wild::Telemetry::Collector::Store::MemoryStore)
       allow(store).to receive(:append).and_raise(NoMethodError, "undefined method `to_h' for a custom adapter bug")
+      allow(store).to receive(:count).and_return(0)
       store
     end
 
@@ -160,6 +169,12 @@ RSpec.describe Wild::Telemetry::Collector::Collector::EventReceiver do
 
     it "does not count it as a storage failure" do
       expect { receiver.receive(valid_action_completed_event) }.not_to change(receiver, :storage_failure_count)
+    end
+
+    it "does not mark the StorageMonitor unhealthy for an adapter bug" do
+      receiver.receive(valid_action_completed_event)
+
+      expect(receiver.storage_monitor).to be_healthy
     end
 
     it "logs it as an internal error, distinct from a storage failure, at :error" do
