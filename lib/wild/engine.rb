@@ -19,9 +19,24 @@ module Wild
   #
   #   mount Wild::Engine, at: "/wild"
   #
-  # Final initializer order and per-namespace boot hooks are designed by
-  # Role 4 in P1. This skeleton mounts cleanly so the engine is loadable
-  # from the install generator's earliest dummy-app integration test.
+  # config.after_initialize bridges the central Wild.config (set via
+  # `Wild.configure { |c| ... }` in a host-app initializer) into the two
+  # namespaces that still keep their own pre-consolidation configuration
+  # object: Wild::AdminTools (adapter dependency-injection) and
+  # Wild::Introspection (the access-policy loader). Without this bridge,
+  # `Wild.config.admin_tools`/`Wild.config.introspection` are read by
+  # nothing at runtime (f-l10-3, f-x1-1, f-l09-2): the two namespaces'
+  # own configuration objects are what CacheExecutor/JobExecutor/
+  # FlagExecutor and the introspection adapters actually consult.
+  #
+  # This is engine-substrate code (root package, "."; see package.yml),
+  # which per ADR-0003 depends on no Wild::* namespace package. It reaches
+  # Wild::AdminTools/Wild::Introspection only through their own
+  # bridge_configuration! entry points (defined in lib/wild/admin_tools.rb
+  # / lib/wild/introspection.rb, both root-mapped entry files per
+  # packwerk.yml's exclude list) rather than reaching directly into either
+  # namespace's package: the resolution/adapter-wrapping logic lives
+  # inside each namespace, not here.
   class Engine < ::Rails::Engine
     isolate_namespace Wild
 
@@ -30,8 +45,8 @@ module Wild
     end
 
     config.after_initialize do
-      # Hook for namespace-level wire-up (autoload triggers, hooks
-      # registration, etc). Filled in during P1.
+      Wild::AdminTools.bridge_configuration!
+      Wild::Introspection.bridge_configuration!
     end
   end
 end

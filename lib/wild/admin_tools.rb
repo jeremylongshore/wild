@@ -79,8 +79,8 @@ module Wild
     class << self
       # The namespace-internal configuration object (adapters/gate/policy are
       # dependency-injected; nil-default). Distinct from the central
-      # Wild.config.admin_tools typed struct — see wild-rvv.uku for the planned
-      # engine-boot reconciliation.
+      # Wild.config.admin_tools typed struct (bridged into this object by
+      # #bridge_configuration!, wild-rvv.uku reconciliation, f-l10-3).
       def configuration
         @configuration ||= Configuration.new
       end
@@ -92,6 +92,90 @@ module Wild
       # @api private
       def reset_configuration!
         @configuration = Configuration.new
+      end
+
+      # Bridges the central Wild.config.admin_tools typed struct into this
+      # namespace's own #configuration object, which is what
+      # Executor::CacheExecutor / JobExecutor / FlagExecutor actually read
+      # from (wild-rvv.uku). For each of cache_adapter/job_adapter/
+      # flag_adapter:
+      #
+      #   - a :default sentinel (the struct's own default) resolves to a
+      #     concrete Executor::Adapters instance wrapping the matching
+      #     backend, IF that backend is loaded (Rails.cache is always
+      #     available in a booted Rails app; Sidekiq/Flipper are optional
+      #     gems and only resolve when the consumer's Gemfile includes them)
+      #   - any other value (nil, or an adapter the consumer configured
+      #     explicitly via `Wild.configure { |c| c.admin_tools.X = ... }`) is
+      #     copied through unchanged
+      #
+      # Finishes by calling #configuration.validate!, which raises
+      # Wild::ConfigurationError naming any adapter still nil after
+      # bridging (an unconfigured :default with no backend loaded, or an
+      # explicit `nil` the consumer set). Called once by Wild::Engine's
+      # config.after_initialize hook at boot; safe to call again (re-reads
+      # Wild.config.admin_tools fresh each time, no memoized bridging state).
+      #
+      # Note: there is no shipped job_adapter backend for plain
+      # ActiveJob::Base (ActiveJob has no generic queue-introspection API to
+      # wrap): only Sidekiq. A consumer on a different queue backend, or
+      # who wants admin_tools without Sidekiq/Flipper installed, must set
+      # cache_adapter/job_adapter/flag_adapter explicitly.
+      def bridge_configuration!
+        require_concrete_adapters!
+        assign_resolved_adapters!
+        configuration.validate!
+      end
+
+      private
+
+      # @api private
+      def require_concrete_adapters!
+        require "wild/admin_tools/executor/adapters/rails_cache_adapter"
+        require "wild/admin_tools/executor/adapters/sidekiq_adapter"
+        require "wild/admin_tools/executor/adapters/flipper_adapter"
+      end
+
+      # @api private
+      def assign_resolved_adapters!
+        central = Wild.config.admin_tools
+        configuration.cache_adapter = resolve_cache_adapter(central.cache_adapter)
+        configuration.job_adapter = resolve_job_adapter(central.job_adapter)
+        configuration.flag_adapter = resolve_flag_adapter(central.flag_adapter)
+      end
+
+      # @api private
+      def resolve_cache_adapter(central_value)
+        resolve_default_adapter(:cache_adapter, central_value) do
+          Executor::Adapters::RailsCacheAdapter.new if defined?(Rails) && Rails.respond_to?(:cache) && Rails.cache
+        end
+      end
+
+      # @api private
+      def resolve_job_adapter(central_value)
+        resolve_default_adapter(:job_adapter, central_value) do
+          Executor::Adapters::SidekiqAdapter.new if defined?(Sidekiq)
+        end
+      end
+
+      # @api private
+      def resolve_flag_adapter(central_value)
+        resolve_default_adapter(:flag_adapter, central_value) do
+          Executor::Adapters::FlipperAdapter.new if defined?(Flipper)
+        end
+      end
+
+      # @api private
+      def resolve_default_adapter(setting_name, central_value)
+        return central_value unless central_value == :default
+
+        yield || raise(
+          Wild::ConfigurationError,
+          "Wild.config.admin_tools.#{setting_name} is :default but no backend gem is loaded to " \
+          "resolve it. Set Wild.config.admin_tools.#{setting_name} explicitly in an initializer, " \
+          "or add the backend gem this default expects (Sidekiq for job_adapter, Flipper for " \
+          "flag_adapter) to your Gemfile."
+        )
       end
     end
   end

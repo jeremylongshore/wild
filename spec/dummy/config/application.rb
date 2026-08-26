@@ -17,6 +17,22 @@ require "action_controller/railtie"
 
 require "wild"
 
+# This dummy app has neither Sidekiq nor Flipper in its dependency graph
+# (wild.gemspec doesn't require them; they're optional backends), so the
+# :default sentinels for admin_tools.job_adapter/flag_adapter cannot resolve
+# to a concrete adapter (Wild::Engine's config.after_initialize hook, added
+# for f-l10-3, raises Wild::ConfigurationError on an unresolvable :default).
+# Set explicit stub adapters here, before Rails.application.initialize! runs
+# config.after_initialize, mirroring how a real Rails app without those gems
+# is expected to configure admin_tools. cache_adapter is deliberately left
+# at :default: Rails.cache is always available once Rails boots, so it
+# exercises the real RailsCacheAdapter-resolution path this dummy app is
+# for. See spec/engine/engine_spec.rb for the dedicated bridging specs.
+Wild.configure do |config|
+  config.admin_tools.job_adapter = Wild::AdminTools::Executor::Adapters::JobAdapter.new
+  config.admin_tools.flag_adapter = Wild::AdminTools::Executor::Adapters::FlagAdapter.new
+end
+
 module Dummy
   class Application < Rails::Application
     # Matches wild.gemspec's `rails >= 7.1` floor: load_defaults must never

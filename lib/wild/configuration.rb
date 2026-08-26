@@ -17,11 +17,19 @@ module Wild
   #
   #     config.introspection.access_policy_path =
   #       Rails.root.join("config/wild/access_policy.yml")
+  #     config.introspection.blocked_resources_path =
+  #       Rails.root.join("config/wild/blocked_resources.yml")
   #
-  #     config.admin_tools.cache_adapter = Rails.cache         # defaulted
-  #     config.admin_tools.job_adapter   = ActiveJob::Base     # defaulted
-  #     config.admin_tools.flag_adapter  = Flipper             # defaulted
-  #                                                              # if Flipper loaded
+  #     # cache_adapter / job_adapter / flag_adapter default to :default (see
+  #     # Wild::Configuration::AdminTools below); Wild::Engine's after_initialize
+  #     # hook resolves :default to a concrete Wild::AdminTools::Executor::
+  #     # Adapters instance wrapping Rails.cache / Sidekiq / Flipper when that
+  #     # backend gem is loaded, or raises Wild::ConfigurationError naming the
+  #     # unresolvable setting. Only Sidekiq is a shipped job_adapter backend
+  #     # today (there is no ActiveJob::Base-wrapping adapter: ActiveJob has no
+  #     # generic queue-introspection API); apps on a different queue backend, or
+  #     # apps that want a job_adapter/flag_adapter without Sidekiq/Flipper
+  #     # installed, must set one explicitly here.
   #
   #     config.capability_gate.on_evaluation_error = :hard_fail # F2-mandated
   #
@@ -60,8 +68,12 @@ module Wild
 
     # `allowed_models: nil` means "derive from access_policy_path"; the
     # introspection runtime treats nil and empty-array distinctly.
+    # `blocked_resources_path` is required by Wild::Introspection::Configuration
+    # #load! alongside access_policy_path (f-l09-2): both are bridged into the
+    # runtime policy loader at Wild::Engine after_initialize.
     Introspection = Struct.new(
       :access_policy_path,
+      :blocked_resources_path,
       :allowed_models,
       keyword_init: true
     )
