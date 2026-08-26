@@ -3,6 +3,7 @@
 require "wild/version"
 require "wild/error"
 require "wild/configuration"
+require "wild/audit_failure_log"
 require "wild/engine"
 require "wild/hooks"
 require "wild/capability_gate"

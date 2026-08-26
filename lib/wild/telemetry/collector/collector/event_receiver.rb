@@ -73,42 +73,19 @@ module Wild
           end
 
           def log_storage_failure(error)
-            logger = Wild.config.audit_logger
-            return unless logger.respond_to?(:error)
-
-            logger.error(
-              "[wild:telemetry:collector] event store append failed: " \
-              "#{error.class}: #{safe_message(error)} (event dropped, fire-and-forget)"
+            Wild::AuditFailureLog.record(
+              tag: "telemetry:collector",
+              error: error,
+              detail: "event store append failed (event dropped, fire-and-forget)"
             )
-          rescue StandardError
-            # The configured logger is itself broken. There is nowhere left
-            # to record this; the counter above already made the failure
-            # observable without depending on the logger working.
-            nil
           end
 
           def log_internal_error(error)
-            logger = Wild.config.audit_logger
-            return unless logger.respond_to?(:error)
-
-            logger.error(
-              "[wild:telemetry:collector] unexpected internal error while storing event: " \
-              "#{error.class}: #{safe_message(error)} (event dropped, fire-and-forget)"
+            Wild::AuditFailureLog.record(
+              tag: "telemetry:collector",
+              error: error,
+              detail: "unexpected internal error while storing event (event dropped, fire-and-forget)"
             )
-          rescue StandardError
-            # Same rationale as #log_storage_failure: a broken logger has
-            # nowhere left to record this, and there is no counter to fall
-            # back on for internal errors, but re-raising here would turn a
-            # should-have-been-caught error into an uncaught one.
-            nil
-          end
-
-          # #message on an arbitrary rescued exception is not guaranteed safe
-          # (mirrors Wild::CapabilityGate::Evaluator#safe_message).
-          def safe_message(error)
-            error.message
-          rescue StandardError
-            "<unprintable message>"
           end
         end
       end
