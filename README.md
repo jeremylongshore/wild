@@ -38,7 +38,7 @@ The namespaces:
 | `Wild::Hooks` | Hook lifecycle + concerns shared across namespaces |
 | `Wild::Analyzers::Permission` | Permission model analyzer (CLI + library) |
 | `Wild::Analyzers::TestFlakes` | Test flake forensics (CLI + library) |
-| `Wild::Skillops` | Skill/capability registry (internal — earn separate gem when external consumer appears) |
+| `Wild::Skillops` | Skill/capability registry (internal and disabled by default; set `config.skillops.enabled = true` to opt in, then earn a separate gem when an external consumer appears) |
 
 ## Origin
 

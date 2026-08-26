@@ -136,4 +136,11 @@ RSpec.configure do |config|
   config.before do
     Wild.reset_config! if Wild.respond_to?(:reset_config!)
   end
+
+  # Skillops is intentionally internal and disabled by default. Its own
+  # behavior specs exercise the explicit consumer opt-in; policy specs can
+  # still reset configuration and assert the disabled default directly.
+  config.before(file_path: %r{spec/wild/skillops/}) do
+    Wild.configure { |settings| settings.skillops.enabled = true }
+  end
 end

@@ -54,7 +54,16 @@ module Wild
   module Skillops
     # Build a fully-wired registry instance. Returns a RegistryFacade
     # exposing all subsystems through one object.
+    #
+    # Skillops is internal until a consumer deliberately opts in. Keeping this
+    # guard at the public factory—not at file require time—lets the rest of
+    # Wild boot normally while making the F5 default operational.
     def self.build
+      unless Wild.config.skillops.enabled
+        raise DisabledError,
+              "Wild::Skillops is disabled by default; set Wild.config.skillops.enabled = true to opt in"
+      end
+
       store     = Registry::Store.new
       tag_index = Discovery::TagIndex.new
       RegistryFacade.new(**build_components(store, tag_index))
