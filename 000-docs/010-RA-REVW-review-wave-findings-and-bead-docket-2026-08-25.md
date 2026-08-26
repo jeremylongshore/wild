@@ -4,7 +4,7 @@
 | --- | --- |
 | **Doc** | `010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md` |
 | **Date** | 2026-08-25 |
-| **Status** | DRAFT (flips to FINAL at Stage 4 close-out, per `009-PP-PLAN` section 3) |
+| **Status** | FINAL (Stage 4 closed 2026-08-26; AAR: `011-AA-AACR-strategic-review-and-fix-wave-2026-08-26.md`) |
 | **Scope** | `jeremylongshore/wild` only: 10 namespaces, the engine surface, CI, tests, docs, all 36 non-closed beads |
 | **Base SHA** | `339453f` (main after PRs #51, #52, #53/#55 merged) |
 | **Run id** | `wild-review-wave-2026-08-25` |

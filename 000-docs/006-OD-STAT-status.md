@@ -3,8 +3,8 @@
 > Current state of the consolidation build against the 4-week plan.
 
 **Author:** Jeremy Longshore
-**Date:** 2026-08-25 (Role 6 paused 2026-06-02; strategic review-wave interlude opened)
-**Status:** P1 paused — Roles 4 ✓, 5 ✓, 6 ⏸ paused (F2 epic closed), **6.5 ▸ review interlude in progress**, 7 ○ not started
+**Date:** 2026-08-26 (Role 6 paused 2026-06-02; strategic review-wave closeout)
+**Status:** P1 paused — Roles 4 ✓, 5 ✓, 6 ⏸ paused (F2 epic closed), **6.5 ✓ review wave complete**, 7 ○ not started
 
 > Canonical live state: `/home/jeremy/000-projects/wild/build-orchestration/STATUS.md`. This doc mirrors its summary.
 
@@ -30,11 +30,11 @@
 - [x] **Gate 1** — engine shape passed (code moves proceeded; per-PR Fowler/Armstrong/Hickey reviews ongoing)
 - [x] **Role 5 (ruby refactor)** — all 10 namespaces moved into `lib/wild/<namespace>/` (PRs #20–#31; #31 final). 227 lib files, ~3060 specs, 0 failures, RuboCop clean
 - [x] **Role 6 (security boundary) — partial, paused 2026-06-02** — F2 audit-emission core (#32), detect_cycle tri-color DFS (#33), F4 corpus reconcile (#34), cut max_prerequisite_depth (#35), F2 ordering + hole (#36), F2 shape↔schema (#37), status reconcile (#40), **F2 emit-time schema validator (#41) closing the F2 epic**, Gate-rescue contract pinned (#42), vendored audit-harness 1.1.5 (#43)
-- [ ] **Role 6.5 (strategic review interlude) — in progress since 2026-08-25.** Plan of record: [`009-PP-PLAN`](009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md). Epic GH [#47](https://github.com/jeremylongshore/wild/issues/47); stage issues #48 (green baseline), #49 (review + bead docket), #50 (close-out). Pre-flight so far: #51 (Gemfile.lock + lint + `ci-ok` fan-in), #52 (7 wall-clock spec failures fixed; suite green on 3 seeds), this docs truth pass.
+- [x] **Role 6.5 (strategic review interlude) — completed 2026-08-26.** Plan of record: [`009-PP-PLAN`](009-PP-PLAN-strategic-review-and-fix-wave-2026-08-25.md); review record: [`010-RA-REVW`](010-RA-REVW-review-wave-findings-and-bead-docket-2026-08-25.md). All remediation and verifier Beads are closed through PR #85; closeout gate receipt: 3,325 RSpec examples, RuboCop/Packwerk clean, Brakeman 0 warnings, Bundler Audit 0 vulnerabilities. Stage 4 AAR and showcase decision are tracked under `wild-vfo.4`.
 
 ### Next up (Role 6.5 → Role 6 remaining → Role 7)
 
-- [ ] Role 6.5: Stage 2 review wave (12 lanes, 3-lens verify, bead docket over all 36 non-closed beads) → Stage 3 fix clusters → Stage 4 AAR + showcase decision. The bead docket may re-scope or close items below.
+- [ ] Role 6.5 closeout: file the AAR and record the showcase decision; remediation and verifier work is complete.
 - [ ] `wild-rvv.4.2` (F6 half-published audit), `wild-rvv.5.1`/`.5.2` (F7/F8), `wild-rvv.5.3` (MIN-Kleppmann), `wild-rvv.6.2` (Hooks::Audit)
 - [ ] Role 6 follow-ups: `wild-0c3` (dark-audit ALLOW posture), `wild-28y` (inert `on_evaluation_error`)
 - [ ] Role 7 (`test-automator`): `wild-rvv.7.1` (F3 vanity-test sweep) + `wild-rvv.7.2`

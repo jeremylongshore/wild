@@ -15,6 +15,16 @@ section splits into a separate file.
 
 ### Repo
 
+- **Strategic review-and-fix wave completed** (review wave, findings f-l01-1,
+  f-l02-1, f-l03-1/2, f-l08-2/3/4, f-l09-1/2/3, f-l10-1/2/3/5/6,
+  f-x1-1, f-x2-1/2; PRs #68–#85). The closeout covers every namespace and
+  cross-cutting seam: telemetry redaction and persistence, capability-gate
+  audit/error handling, enforced introspection policy, engine configuration
+  bridging, atomic admin confirmation nonces, hooks audit sanitization, and
+  meaningful Packwerk/Brakeman lanes. The detailed evidence and remaining
+  product work are in `000-docs/010-RA-REVW-…` and `011-AA-AACR-…`; this is
+  not a release or a claim that the generator/MCP stubs are complete.
+
 - **Review-proven package claims, wildcard invariants, and vanity specs corrected**
   (findings f-l05-4, f-l05-6, f-l06-4, f-l06-6, f-x1-2, f-x1-5, f-x2-4,
   f-x2-7, f-l03-3, f-l08-6, f-l08-12). Package manifests now describe only
