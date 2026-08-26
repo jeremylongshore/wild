@@ -1,21 +1,34 @@
 # Wild::CapabilityGate — Tier 3 policy evaluation + audit emission.
 #
-# Per ADR-0003: gates every admin operation (Tier 4 → CapabilityGate
-# → decision + audit). The highest-leverage namespace for security
-# correctness in the gem.
+# Per ADR-0003: WILL gate every admin operation (Tier 4 → CapabilityGate
+# → decision + audit) once Role 7 wires Introspection::Identity::CapabilityGate
+# (currently a v1 authenticated?-only stub) to this namespace's Gate class.
+# As of 2026-08-25 nothing in lib/ calls Wild::CapabilityGate — see
+# `git grep -n "CapabilityGate" -- lib` (review wave finding f-l08-12). The
+# highest-leverage namespace for security correctness in the gem, once wired.
 #
 # F2 fix (Armstrong's most-leveraged finding): every rescue in this
 # namespace MUST emit a structured audit event AND deny the request.
 # :evaluation_error is hard-fail. Audit-liveness spec at
 # spec/wild/capability_gate/audit_liveness_spec.rb is Role 6 P1.
 #
-# F4 fix: shares lib/wild/schemas/wildcard_corpus.yml with
-# Wild::Analyzers::Permission (no drift).
+# F4 fix, vacuous satisfaction: CapabilityGate performs NO capability-name
+# wildcard matching at all (grant lookups here are exact-match only, per
+# grant.rb). It does not load, require, or call into
+# lib/wild/schemas/wildcard_corpus.yml or WildcardMatcher; the corpus is
+# consumed only by Wild::Analyzers::Permission. F4 is satisfied because
+# there is no wildcard-matching code path here to drift (review wave
+# finding f-l05-4), matching wildcard_corpus.yml's own framing.
 #
-# F6 fix: Session/Store wired in or deleted (Role 6 decision).
+# F6 fix: Session/Store wired in or deleted (Role 6 decision, see bead
+# "F6: Audit and either wire or delete every half-published API surface
+# across the namespaces", wild-rvv.4.2).
 
 enforce_dependencies: true
 dependencies:
   - "lib/wild/hooks"
-  - "lib/wild/analyzers/permission"
   - "."
+  # NOTE (review wave finding f-l08-12, 2026-08-25): "lib/wild/analyzers/permission"
+  # was removed from this list. It was declared but unused (no code here ever
+  # called into Wild::Analyzers::Permission), and Tier 3 depending on Tier 2 is
+  # not an allowed edge under ADR-0003's tier rules (T3 depends on T1 only).

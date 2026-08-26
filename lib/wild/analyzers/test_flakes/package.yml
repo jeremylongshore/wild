@@ -1,12 +1,17 @@
 # Wild::Analyzers::TestFlakes — Tier 2 test-flake forensics.
 #
-# Per ADR-0003: classifies test flakes from telemetry. Consumes
-# Wild::Telemetry::Analysis for upstream gap signal. Beck-mandated
-# golden corpus lives under spec/support/golden_corpora/test_flakes/
-# (Role 7 P1 ownership).
+# Per ADR-0003: classifies test flakes from telemetry. This namespace was
+# DECLARED to consume Wild::Telemetry::Analysis for upstream gap signal, but
+# as of 2026-08-25 no code under lib/wild/analyzers/test_flakes/ references
+# Wild::Telemetry::Analysis or Wild::Hooks, and both dependency edges were
+# unused (review wave finding f-l06-4). The Telemetry::Analysis edge was
+# also a Tier-2-on-Tier-2 sibling edge, not an allowed shape under ADR-0003
+# (Tier 2 depends on Tier 1 only) -- both edges are removed below. Beck-
+# mandated golden corpus under spec/support/golden_corpora/test_flakes/
+# also does not exist yet (Role 7 P1 ownership, bead "F3: Replace vanity
+# test counts with judgment tests across all namespaces", wild-rvv.7.1).
 
 enforce_dependencies: true
 dependencies:
   - "lib/wild/hooks"
-  - "lib/wild/telemetry/analysis"
   - "."

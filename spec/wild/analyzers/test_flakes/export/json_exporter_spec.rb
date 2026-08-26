@@ -37,9 +37,14 @@ RSpec.describe Wild::Analyzers::TestFlakes::Export::JsonExporter do
       expect(parsed["summary"]["total"]).to eq(2)
     end
 
-    it "includes avg_flake_rate in summary" do
+    it "computes avg_flake_rate as the mean of each entry's flake_record.flake_rate" do
       parsed = JSON.parse(exporter.export(entries))
-      expect(parsed["summary"]["avg_flake_rate"]).to be_a(Numeric)
+      expected = (entries.sum { |e| e.flake_record.flake_rate } / entries.size).round(4)
+      expect(parsed["summary"]["avg_flake_rate"]).to eq(expected)
+      # Both fixture entries share the default flake_record_with(flake_rate_numerator: 2, total: 5)
+      # shape (2 failures / 5 runs), so the average is pinned to a concrete value, not just
+      # re-derived from the same formula the exporter uses.
+      expect(parsed["summary"]["avg_flake_rate"]).to eq(0.4)
     end
 
     it "accepts custom metadata" do

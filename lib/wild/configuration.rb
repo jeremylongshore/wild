@@ -105,6 +105,14 @@ module Wild
     ) do
       def initialize(**kwargs)
         super(
+          # NOTE: (review wave finding f-l08-6, 2026-08-25) nothing in
+          # lib/wild/capability_gate reads this. Wild::CapabilityGate::Gate#initialize
+          # takes config_path: directly, not Wild.config. The struct field stays
+          # (Section on_evaluation_error below explains the same decide-or-cut
+          # posture) but a consumer configuring this expecting the Gate to pick
+          # it up will get nothing: see README's "Configuration" section, which
+          # points to config.analyzers.permission.capabilities_path (the value
+          # Wild::Analyzers::Permission.audit actually reads) instead.
           capabilities_path: kwargs.fetch(:capabilities_path, nil),
           # Directory containing capabilities.yml and grants.yml. Consumers
           # that route a privileged namespace through CapabilityGate must set

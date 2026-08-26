@@ -1,7 +1,12 @@
 # Wild::Telemetry::Collector — Tier 1 telemetry ingest.
 #
 # Per ADR-0003: privacy-aware session/event ingestion. Emits unstructured
-# events; Pipeline normalizes them in the next tier.
+# events; Pipeline is DECLARED to normalize them in the next tier, but as of
+# 2026-08-25 no production code feeds Collector output into Pipeline.process
+# (review wave finding f-l03-3). The Collector-to-Pipeline data flow is
+# allowed by the dependency graph but not yet wired: each namespace runs
+# standalone today. See bead "F7: Add boundary normalization wherever data
+# crosses namespaces" (wild-rvv.5.1) for the wiring work.
 #
 # F7 (boundary normalization): Collector MUST NOT be imported directly by
 # Wild::Telemetry::Analysis. Analysis consumes only normalized Pipeline

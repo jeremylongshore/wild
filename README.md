@@ -107,7 +107,7 @@ Wild.configure do |config|
   # job_adapter/flag_adapter explicitly if you're not on Sidekiq/Flipper.
   config.admin_tools.cache_adapter         = Rails.cache
 
-  config.capability_gate.capabilities_path = Rails.root.join("config/wild/capabilities.yml")
+  config.analyzers.permission.capabilities_path = Rails.root.join("config/wild/capabilities.yml")
   config.telemetry.collector.enabled       = true
 end
 ```
@@ -116,6 +116,11 @@ Both `access_policy_path` and `blocked_resources_path` are required together: th
 policy loader raises if only one is set. See `Wild::AdminTools.bridge_configuration!` and
 `Wild::Introspection.bridge_configuration!` (`lib/wild/admin_tools.rb`, `lib/wild/introspection.rb`)
 for the full bridging contract.
+
+`Wild.config.capability_gate.capabilities_path` exists for a future integration,
+but the capability gate does not read it today; `Wild::CapabilityGate::Gate`
+takes `config_path:` directly. The analyzer setting above is the one
+`Wild::Analyzers::Permission.audit` actually reads.
 
 ## Development
 

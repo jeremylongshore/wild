@@ -2,7 +2,11 @@
 #
 # Per ADR-0003: consumes Pipeline-normalized events. NEVER imports
 # Collector directly (F7 enforcement — reaching past Pipeline bypasses
-# the normalization seam).
+# the normalization seam). As of 2026-08-25 the dependency edge on
+# lib/wild/telemetry/pipeline below is allowed-but-unused: no production
+# code in this namespace calls into Pipeline's output yet (review wave
+# finding f-l03-3). See bead "F7: Add boundary normalization wherever
+# data crosses namespaces" (wild-rvv.5.1) for the wiring work.
 #
 # F8 (decomplect identity/value/time): Gap = (UUID, immutable record,
 # sequence number). This package's design is the locus of F8 work.
