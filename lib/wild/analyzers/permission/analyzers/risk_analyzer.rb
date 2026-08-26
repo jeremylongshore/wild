@@ -67,7 +67,7 @@ module Wild
           end
 
           def resolve_pattern_caps(pattern, cap_index)
-            if pattern.include?("*")
+            if WildcardMatcher.wildcard?(pattern)
               cap_index.values.select { |c| WildcardMatcher.matches?(pattern, c.name) }
             else
               [cap_index[pattern]].compact

@@ -15,7 +15,7 @@ module Wild
           end
 
           def wildcard_capabilities
-            capabilities.select { |c| c.include?("*") }
+            capabilities.select { |c| Analyzers::WildcardMatcher.wildcard?(c) }
           end
 
           def expired?

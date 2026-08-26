@@ -30,7 +30,7 @@ module Wild
           end
 
           def explicit_caps(grant, cap_names)
-            grant.capabilities.reject { |p| p.include?("*") }.select { |c| cap_names.include?(c) }
+            grant.capabilities.reject { |p| WildcardMatcher.wildcard?(p) }.select { |c| cap_names.include?(c) }
           end
 
           def shadowing_wildcards(cap_name, original_grant, caller_grants)
