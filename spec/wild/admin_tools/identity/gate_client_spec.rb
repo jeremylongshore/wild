@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "tmpdir"
+require "yaml"
+require "fileutils"
 
 RSpec.describe Wild::AdminTools::Identity::GateClient do
   let(:test_gate) { Wild::AdminTools::TestSupport::TestGate.new }
@@ -132,6 +135,52 @@ RSpec.describe Wild::AdminTools::Identity::GateClient do
         rescue Wild::CapabilityGate::AuditSchemaError
           nil
         end.to output(/capability gate raised a developer error: Wild::CapabilityGate::AuditSchemaError/).to_stderr
+      end
+    end
+
+    # f-l08-1: TestGate above never routes context through a real
+    # ConfigValueChecker, so it cannot exercise the bug — a real
+    # Wild::CapabilityGate::Gate is required to prove GateClient#authorize's
+    # `context: { action_params: params }` still reaches the prerequisite
+    # checker whole, regardless of how large `params` is.
+    context "with a real CapabilityGate::Gate evaluating an oversized action_params context" do
+      let(:config_dir) { Dir.mktmpdir }
+
+      after { FileUtils.remove_entry(config_dir) }
+
+      def write_gate_config(config_dir, expected_action_params)
+        capabilities = {
+          "capabilities" => [
+            { "name" => "admin_tools.inspect_job", "description" => "f-l08-1 real-gate context test",
+              "risk_level" => "standard",
+              "prerequisites" => [
+                { "type" => "config_value", "key" => "action_params", "value" => expected_action_params }
+              ] }
+          ]
+        }
+        grants = { "grants" => [{ "caller" => "user_1", "capabilities" => ["admin_tools.inspect_job"] }] }
+        File.write(File.join(config_dir, "capabilities.yml"), YAML.dump(capabilities))
+        File.write(File.join(config_dir, "grants.yml"), YAML.dump(grants))
+      end
+
+      it "grants on the REAL padded params, not a size-truncated placeholder" do
+        padded_params = { "flag" => true, "padding" => "x" * 3000 }
+        write_gate_config(config_dir, padded_params)
+        real_client = described_class.new(gate: Wild::CapabilityGate::Gate.new(config_path: config_dir))
+
+        result = real_client.authorize(session, "inspect_job", params: padded_params)
+
+        expect(result.gate_result).to eq("allowed")
+      end
+
+      it "denies when the real padded params do not match the policy (proves the check is real, not size-bypassed)" do
+        padded_params = { "flag" => true, "padding" => "x" * 3000 }
+        write_gate_config(config_dir, { "flag" => false, "padding" => "y" })
+        real_client = described_class.new(gate: Wild::CapabilityGate::Gate.new(config_path: config_dir))
+
+        result = real_client.authorize(session, "inspect_job", params: padded_params)
+
+        expect(result.gate_result).to eq("denied")
       end
     end
 

@@ -202,6 +202,13 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
 
       expect(event.context).to be_frozen
     end
+
+    it "bounds an oversized context on the Event itself, end to end (f-l08-1)" do
+      big_context = { "blob" => "x" * 3000 }
+      event = described_class.from_evaluation(result, registry: registry, context: big_context)
+
+      expect(event.context).to eq({ truncated: true, keys: ["blob"] })
+    end
   end
 
   describe ".coerce_context (f-l08 addendum items 4, 10, 11)" do
@@ -255,20 +262,46 @@ RSpec.describe Wild::CapabilityGate::Audit::Event do
       expect(described_class.coerce_context(deep)).to eq({ raw: "#<Array size=1>" })
     end
 
-    it "replaces a Hash context containing NaN with a bounded, diagnosable summary" do
-      coerced = described_class.coerce_context({ "value" => Float::NAN, "other" => 1 })
-      expect(coerced).to eq({ truncated: true, keys: %w[value other] })
+    # f-l08-1: coerce_context is deliberately NOT size- or JSON-safety-bounded
+    # — that would let caller-controlled context content/size decide what a
+    # prerequisite checker sees. NaN and oversized-Hash bounding moved to
+    # `.audit_context` below (the audit-only pipeline).
+    it "passes a Hash containing NaN through unchanged (no size/serializability bounding here)" do
+      hostile = { "value" => Float::NAN, "other" => 1 }
+      expect(described_class.coerce_context(hostile)).to eq(hostile)
     end
 
-    it "replaces an oversized Hash context (over the 2 KiB extra budget) with a bounded summary" do
+    it "passes an oversized Hash (over the 2 KiB extra budget) through unchanged (no bounding here)" do
       big = { "blob" => "x" * 3000 }
-      coerced = described_class.coerce_context(big)
-      expect(coerced).to eq({ truncated: true, keys: ["blob"] })
+      expect(described_class.coerce_context(big)).to eq(big)
     end
 
     it "keeps a small, JSON-safe Hash context exactly as given" do
       small = { "env" => "test", "count" => 3 }
       expect(described_class.coerce_context(small)).to eq(small)
+    end
+  end
+
+  describe ".audit_context (f-l08-1: audit-only bounding, never applied to the policy decision)" do
+    it "replaces a Hash context containing NaN with a bounded, diagnosable summary" do
+      coerced = described_class.audit_context({ "value" => Float::NAN, "other" => 1 })
+      expect(coerced).to eq({ truncated: true, keys: %w[value other] })
+    end
+
+    it "replaces an oversized Hash context (over the 2 KiB extra budget) with a bounded summary" do
+      big = { "blob" => "x" * 3000 }
+      coerced = described_class.audit_context(big)
+      expect(coerced).to eq({ truncated: true, keys: ["blob"] })
+    end
+
+    it "keeps a small, JSON-safe Hash context exactly as given" do
+      small = { "env" => "test", "count" => 3 }
+      expect(described_class.audit_context(small)).to eq(small)
+    end
+
+    it "never raises even on a value coerce_context itself degrades to a placeholder" do
+      hostile = Class.new { def to_hash = raise("boom") }.new
+      expect { described_class.audit_context(hostile) }.not_to raise_error
     end
   end
 

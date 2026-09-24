@@ -51,7 +51,18 @@ RSpec.describe Wild::CapabilityGate::Prerequisites::ConfigValueChecker do
 
         expect(result).not_to be_satisfied
         expect(result.details).to include("admin_enabled")
-        expect(result.details).to include("nil")
+        expect(result.details).to include("not present")
+      end
+    end
+
+    context "when context is missing the key and the prerequisite has no explicit value (f-l08-1)" do
+      it "fails rather than treating the absent key as satisfying a nil expectation" do
+        no_value_prereq = Wild::CapabilityGate::Prerequisite.new(type: :config_value, key: "admin_enabled")
+        result = described_class.check(no_value_prereq, context: {})
+
+        expect(result).not_to be_satisfied
+        expect(result.details).to include("admin_enabled")
+        expect(result.details).to include("not present")
       end
     end
 

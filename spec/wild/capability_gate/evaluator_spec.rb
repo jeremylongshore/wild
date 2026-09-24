@@ -420,6 +420,81 @@ RSpec.describe Wild::CapabilityGate::Evaluator do
       # rubocop:enable RSpec/MultipleExpectations, RSpec/ExampleLength
     end
 
+    # f-l08-1: fails on main. The prerequisite checker used to receive the
+    # SAME size-bounded context the audit trail records, so padding context
+    # past the 2 KiB audit budget replaced it with a `{ truncated: true, ...
+    # }` marker BEFORE ConfigValueChecker ever looked at it — an absent-key
+    # lookup against that marker returns nil, which used to equal a
+    # valueless prerequisite's `nil` expectation and grant unconditionally.
+    # These specs pin that the policy decision always sees the real,
+    # complete context regardless of size; only the audit record shrinks.
+    context "with an oversized context that still satisfies a config_value prerequisite" do
+      # rubocop:disable RSpec/ExampleLength -- one coherent invariant: real decision + truncated audit record
+      it "grants on the real value, not on context size, and truncates only the audit record" do
+        prereq = Wild::CapabilityGate::Prerequisite.new(type: :config_value, key: "admin_enabled", value: true)
+        capability = Wild::CapabilityGate::Capability.new(
+          name: :gated_capability, description: "Test gated capability",
+          risk_level: :critical, prerequisites: [prereq]
+        )
+        grants = [
+          Wild::CapabilityGate::Grant.new(caller_id: "service-account:admin-agent", capabilities: [:gated_capability])
+        ]
+        ev = described_class.new(
+          registry: Wild::CapabilityGate::Registry.new([capability]),
+          grants: grants,
+          audit_writer: audit_writer
+        )
+        oversized_context = { "admin_enabled" => true, "blob" => "x" * 3000 }
+
+        result = ev.evaluate(
+          caller_id: "service-account:admin-agent",
+          capability_name: :gated_capability,
+          context: oversized_context
+        )
+
+        expect(result).to be_allowed
+
+        events = parse_audit_log
+        expect(events.size).to eq(1)
+        expect(events.first["outcome"]).to eq("allow")
+        expect(events.first.dig("extra", "context")).to eq(
+          { "truncated" => true, "keys" => %w[admin_enabled blob] }
+        )
+      end
+      # rubocop:enable RSpec/ExampleLength
+    end
+
+    context "with an oversized context that omits the config_value prerequisite's key" do
+      # rubocop:disable RSpec/ExampleLength -- one coherent invariant, same shape as the sibling example above
+      it "denies (padding never manufactures a grant the real context wouldn't produce)" do
+        prereq = Wild::CapabilityGate::Prerequisite.new(type: :config_value, key: "admin_enabled", value: true)
+        capability = Wild::CapabilityGate::Capability.new(
+          name: :gated_capability, description: "Test gated capability",
+          risk_level: :critical, prerequisites: [prereq]
+        )
+        grants = [
+          Wild::CapabilityGate::Grant.new(caller_id: "service-account:admin-agent", capabilities: [:gated_capability])
+        ]
+        ev = described_class.new(
+          registry: Wild::CapabilityGate::Registry.new([capability]),
+          grants: grants,
+          audit_writer: audit_writer
+        )
+        oversized_context_missing_key = { "blob" => "x" * 3000 }
+
+        result = ev.evaluate(
+          caller_id: "service-account:admin-agent",
+          capability_name: :gated_capability,
+          context: oversized_context_missing_key
+        )
+
+        expect(result).to be_denied
+        expect(result.reason).to eq(:prerequisite_not_met)
+        expect(result.details).to include("admin_enabled")
+      end
+      # rubocop:enable RSpec/ExampleLength
+    end
+
     context "when no audit writer is configured" do
       it "does not write any audit log" do
         ev = described_class.from_files(
