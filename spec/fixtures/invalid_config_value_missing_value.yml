@@ -1,0 +1,7 @@
+capabilities:
+  - name: bad_capability
+    description: "config_value prerequisite authored without a value: parameter"
+    risk_level: critical
+    prerequisites:
+      - type: config_value
+        key: admin_enabled

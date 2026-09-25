@@ -25,6 +25,16 @@ module Wild
         end
 
         def self.evaluate_value(prerequisite, context, key)
+          # f-l08-1: an absent key must NEVER satisfy any expectation,
+          # including a prerequisite authored without `value:` (expected ==
+          # nil). Registry::ConfigLoader now refuses to load a valueless
+          # config_value prerequisite at all, but this check is independent
+          # defense-in-depth — a Prerequisite can also be built directly
+          # (tests, a future caller) without going through the loader.
+          unless key_present?(context, key)
+            return CheckResult.failed(details: "config key #{key.inspect} is not present in context")
+          end
+
           expected = prerequisite.params[:value]
           actual = lookup(context, key)
 
@@ -37,6 +47,11 @@ module Wild
           end
         end
         private_class_method :evaluate_value
+
+        def self.key_present?(context, key)
+          context.key?(key.to_s) || context.key?(key.to_s.to_sym)
+        end
+        private_class_method :key_present?
 
         def self.lookup(context, key)
           str_key = key.to_s

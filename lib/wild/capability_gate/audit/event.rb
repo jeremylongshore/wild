@@ -57,16 +57,42 @@ module Wild
           new(**attrs, session_id: session_id, context: context)
         end
 
-        # Coerce an arbitrary caller-supplied value into a safe, bounded Hash
-        # suitable for the audit `context` field. NEVER raises. Public (not
-        # just an Event-internal helper) so Evaluator#evaluate can coerce
-        # context ONCE, up front, and hand the SAME coerced Hash to both the
+        # Coerce an arbitrary caller-supplied value into a safe Hash suitable
+        # for the POLICY DECISION. NEVER raises. Public (not just an
+        # Event-internal helper) so Evaluator#evaluate can coerce context
+        # ONCE, up front, and hand the SAME coerced Hash to both the
         # prerequisite checkers and the audit trail (f-l08 addendum item 10) —
         # previously the checkers saw the raw, possibly hostile context while
         # the audit line recorded a separately-coerced one, so what was
         # decided on and what was audited could disagree.
+        #
+        # f-l08-1: deliberately NOT size-bounded. `.audit_context` (below)
+        # applies the 2 KiB `extra` budget on TOP of this, but only when
+        # building the Event's own @context for the audit record — never
+        # here. A prior version bounded here too, which meant a caller could
+        # pad `context` past 2 KiB to make `bound_context` replace it with
+        # `{ truncated: true, keys: [...] }` before the prerequisite checkers
+        # ever saw it: a `config_value` checker's `key?` lookup against the
+        # truncated marker silently failed instead of against the real
+        # value, so caller-controlled context SIZE decided the outcome of a
+        # prerequisite lookup that has nothing to do with size. Policy
+        # decisions must see the real, complete (if hostile) context; only
+        # the audit *record* of it is ever allowed to shrink.
         def self.coerce_context(value)
-          bound_context(hash_context(value))
+          hash_context(value)
+        end
+
+        # The audit-only view of a coerced context: `.coerce_context`'s
+        # result, additionally bounded to the audit_event.yml `extra` budget
+        # (JSON-unsafe values — NaN/Infinity, invalid encodings — and
+        # oversized payloads collapse to a diagnosable
+        # `{ truncated: true, keys: [...] }` summary rather than losing the
+        # audit line entirely). Applied ONLY here, when constructing an
+        # Event's own @context (see #initialize) — never applied to the Hash
+        # handed to prerequisite checkers (f-l08-1; see `.coerce_context`
+        # above for why that separation matters). NEVER raises.
+        def self.audit_context(value)
+          bound_context(coerce_context(value))
         end
 
         # rubocop:disable Metrics/ParameterLists, Metrics/AbcSize -- value object mirroring the 12-field audit_event.yml schema; ABC is inherent to assigning + lightly coercing each field
@@ -86,15 +112,21 @@ module Wild
           @prerequisites_checked = Array(prerequisites_checked).freeze
           @prerequisites_passed = prerequisites_passed
           @session_id = session_id
-          # f-l08-1 + addendum item 4: re-coerce defensively even when the
-          # caller (Evaluator#evaluate) already coerced context once — this is
-          # the total-construction backstop for any OTHER caller of Event.new
-          # (a test double, a future consumer). self.class.coerce_context never
-          # raises AND always hands back a Hash that is NOT the caller's own
-          # object (see .hash_context below), so freezing it here never freezes
-          # a Hash the caller still holds a live, mutable reference to — the
-          # FrozenError trap the un-dup'd `Hash(context)` used to spring.
-          @context = self.class.coerce_context(context).freeze
+          # f-l08-1 + addendum item 4: re-coerce (and, here, size-bound)
+          # defensively even when the caller (Evaluator#evaluate) already
+          # coerced context once via .coerce_context — this is the
+          # total-construction backstop for any OTHER caller of Event.new (a
+          # test double, a future consumer), and it is the ONLY place the 2
+          # KiB audit budget is applied (see .audit_context). Evaluator's own
+          # coerced-but-unbounded context is what the prerequisite checkers
+          # decided on; this Event's @context is what gets WRITTEN, and the
+          # two are allowed to diverge only by truncation, never by content.
+          # self.class.audit_context never raises AND always hands back a
+          # Hash that is NOT the caller's own object (see .hash_context
+          # below), so freezing it here never freezes a Hash the caller still
+          # holds a live, mutable reference to — the FrozenError trap the
+          # un-dup'd `Hash(context)` used to spring.
+          @context = self.class.audit_context(context).freeze
           freeze
         end
         # rubocop:enable Metrics/ParameterLists, Metrics/AbcSize

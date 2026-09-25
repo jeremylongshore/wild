@@ -101,7 +101,22 @@ module Wild
 
           type = entry.delete("type")
           params = entry.transform_keys(&:to_sym)
+          validate_config_value_params(type, params, index)
           Prerequisite.new(type: type, **params)
+        end
+
+        # f-l08-1: a config_value prerequisite authored without `value:` has
+        # `expected == nil` in ConfigValueChecker; if the same key is also
+        # absent from the runtime context, that used to grant the
+        # prerequisite unconditionally (`nil == nil`). Reject this shape at
+        # load time so a policy-author typo (forgetting `value:`) can never
+        # silently downgrade a gate to "always satisfied" — fail fast at
+        # startup rather than fail open at evaluation time.
+        def validate_config_value_params(type, params, index)
+          return unless type.to_s == "config_value"
+          return if params.key?(:value)
+
+          raise ConfigError, "prerequisite at index #{index} (config_value) missing required 'value' parameter"
         end
       end
     end

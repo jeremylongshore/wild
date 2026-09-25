@@ -79,6 +79,17 @@ RSpec.describe Wild::CapabilityGate::Registry do
         expect { described_class.from_file(File.join(fixtures_dir, "duplicate_names.yml")) }
           .to raise_error(Wild::CapabilityGate::Registry::DuplicateCapabilityError, /duplicate capability name/)
       end
+
+      # f-l08-1: fails on main — a config_value prerequisite with no `value:`
+      # used to load successfully and then, at evaluation time, grant
+      # unconditionally whenever the key was also absent from context
+      # (`nil == nil`). Reject the shape at load, not at evaluation.
+      it "raises on a config_value prerequisite missing its 'value' parameter" do
+        fixture = File.join(fixtures_dir, "invalid_config_value_missing_value.yml")
+        expect { described_class.from_file(fixture) }
+          .to raise_error(Wild::CapabilityGate::Registry::ConfigLoader::ConfigError,
+                          /config_value.*missing required 'value'/)
+      end
     end
   end
 
