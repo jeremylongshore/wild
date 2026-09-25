@@ -69,10 +69,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Only when the owner has enabled it, and only for same-repo PRs (fork PRs
-    # have no secret). Both conditions must hold.
+    # have no secret), and never for Dependabot PRs, which run without
+    # Actions secrets and always failed on the missing MINIMAX_API_KEY.
     if: >-
       ${{ vars.ENABLE_MINIMAX_REVIEW == 'true' &&
-          github.event.pull_request.head.repo.full_name == github.repository }}
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]' }}
     steps:
       - name: MiniMax code review (defect lane)
         # jeremylongshore/minimax-code-review, maintained fork, SHA-pinned per
@@ -190,7 +192,8 @@ jobs:
     if: >-
       ${{ vars.ENABLE_MINIMAX_REVIEW == 'true' &&
           vars.ENABLE_MINIMAX_ADVERSARIAL != 'false' &&
-          github.event.pull_request.head.repo.full_name == github.repository }}
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]' }}
     steps:
       - name: MiniMax adversarial review (claims lane)
         uses: jeremylongshore/minimax-code-review@2f8eefa6d1eccf8301ad230cd23ed8fc59df6f62
