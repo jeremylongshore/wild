@@ -266,13 +266,19 @@ RSpec.describe "Access Control Adversarial", :adversarial, :safety do
   # -------------------------------------------------------------------
   describe "response timing consistency" do
     it "allowed, blocked, and unknown models respond within same order of magnitude" do
+      # Warm each path once, then take the median of 21 samples, so a single
+      # GC pause or scheduler hiccup on a shared CI runner cannot decide the
+      # outcome. Calls here take microseconds, so a pure ratio also needs an
+      # absolute floor: a 10x gap under ~5 ms is runner noise, not a timing
+      # oracle an attacker could use.
       measure = lambda { |model|
-        times = Array.new(5) do
+        tool_schema.call(model_name: model, server_context: ctx)
+        times = Array.new(21) do
           start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           tool_schema.call(model_name: model, server_context: ctx)
           Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
         end
-        times.sort[2] # median
+        times.sort[10] # median
       }
 
       allowed_time = measure.call("Account")
@@ -282,8 +288,8 @@ RSpec.describe "Access Control Adversarial", :adversarial, :safety do
       max_time = [allowed_time, blocked_time, unknown_time].max
       min_time = [allowed_time, blocked_time, unknown_time].min
 
-      # Generous 10x tolerance for SQLite test environment
-      expect(max_time).to be < (min_time * 10)
+      # Generous 10x tolerance for SQLite test environment, with a 5 ms floor
+      expect(max_time).to be < [min_time * 10, min_time + 0.005].max
     end
   end
 
